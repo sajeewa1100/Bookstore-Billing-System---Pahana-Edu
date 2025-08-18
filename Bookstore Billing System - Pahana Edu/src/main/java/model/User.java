@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
  * User model class representing system users
  */
 public class User {
+
     private int userId;
     private String username;
     private String password;
@@ -17,6 +18,8 @@ public class User {
     private LocalDateTime createdAt;
     private LocalDateTime lastLogin;
     private LocalDateTime updatedAt;
+    
+   
     
     // Default constructor
     public User() {
@@ -158,3 +161,4 @@ public class User {
                 '}';
     }
 }
+

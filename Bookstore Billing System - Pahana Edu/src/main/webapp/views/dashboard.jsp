@@ -1,547 +1,504 @@
+
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
-<%@ page import="model.User" %>
-<%@ page import="java.time.LocalDateTime" %>
-<%@ page import="java.time.format.DateTimeFormatter" %>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Pahana Edu</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --sidebar-bg: #2c3e50;
-            --sidebar-hover: #34495e;
-        }
-        
-        body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        .sidebar {
-            background: var(--sidebar-bg);
-            min-height: 100vh;
-            width: 250px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            transition: all 0.3s;
-            z-index: 1000;
-        }
-        
-        .sidebar.collapsed {
-            width: 70px;
-        }
-        
-        .sidebar .nav-link {
-            color: #ecf0f1;
-            padding: 15px 20px;
-            border-radius: 0;
-            transition: all 0.3s;
-            border-left: 3px solid transparent;
-        }
-        
-        .sidebar .nav-link:hover {
-            background-color: var(--sidebar-hover);
-            border-left-color: #3498db;
-            color: #ffffff;
-        }
-        
-        .sidebar .nav-link.active {
-            background-color: var(--sidebar-hover);
-            border-left-color: #e74c3c;
-            color: #ffffff;
-        }
-        
-        .sidebar .nav-link i {
-            width: 20px;
-            text-align: center;
-            margin-right: 10px;
-        }
-        
-        .sidebar.collapsed .nav-link span {
-            display: none;
-        }
-        
-        .main-content {
-            margin-left: 250px;
-            transition: all 0.3s;
-            min-height: 100vh;
-        }
-        
-        .main-content.expanded {
-            margin-left: 70px;
-        }
-        
-        .navbar {
-            background: var(--primary-gradient);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .navbar-brand {
-            color: white !important;
-            font-weight: bold;
-        }
-        
-        .stats-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-            border: none;
-            overflow: hidden;
-        }
-        
-        .stats-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stats-card .card-body {
-            padding: 2rem;
-        }
-        
-        .stats-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-        }
-        
-        .stats-icon.books {
-            background: linear-gradient(135deg, #3498db, #2980b9);
-        }
-        
-        .stats-icon.invoices {
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-        }
-        
-        .stats-icon.clients {
-            background: linear-gradient(135deg, #2ecc71, #27ae60);
-        }
-        
-        .stats-icon.revenue {
-            background: linear-gradient(135deg, #f39c12, #e67e22);
-        }
-        
-        .chart-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            border: none;
-        }
-        
-        .recent-activity {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .activity-item {
-            display: flex;
-            align-items: center;
-            padding: 15px 0;
-            border-bottom: 1px solid #ecf0f1;
-        }
-        
-        .activity-item:last-child {
-            border-bottom: none;
-        }
-        
-        .activity-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            font-size: 1rem;
-            color: white;
-        }
-        
-        .activity-icon.login {
-            background: linear-gradient(135deg, #3498db, #2980b9);
-        }
-        
-        .activity-icon.book {
-            background: linear-gradient(135deg, #2ecc71, #27ae60);
-        }
-        
-        .activity-icon.invoice {
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-        }
-        
-        .quick-action-btn {
-            border-radius: 12px;
-            padding: 15px;
-            border: none;
-            color: white;
-            font-weight: 600;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: block;
-            text-align: center;
-        }
-        
-        .quick-action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            color: white;
-        }
-        
-        .quick-action-btn.books {
-            background: linear-gradient(135deg, #3498db, #2980b9);
-        }
-        
-        .quick-action-btn.invoices {
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-        }
-        
-        .quick-action-btn.clients {
-            background: linear-gradient(135deg, #2ecc71, #27ae60);
-        }
-        
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 70px;
-            }
-            
-            .main-content {
-                margin-left: 70px;
-            }
-            
-            .sidebar .nav-link span {
-                display: none;
-            }
-        }
-    </style>
+    <title>Dashboard - Pahana Bookstore</title>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=1.0" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
 </head>
 <body>
-    <%
-        User currentUser = (User) session.getAttribute("user");
-        if (currentUser == null) {
-            response.sendRedirect("views/login.jsp");
-            return;
-        }
-        
-        // Check success message
-        String successMessage = request.getParameter("success");
-        
-        // Format current date
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy");
-        String currentDate = now.format(formatter);
-    %>
-    
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="p-3">
-            <h5 class="text-white mb-0">
-                <i class="fas fa-graduation-cap me-2"></i>
-                <span>Pahana Edu</span>
-            </h5>
+
+<%-- Include Sidebar --%>
+<jsp:include page="sidebar.jsp" flush="true" />
+
+<main class="main-content">
+    <div class="top-bar">
+        <h2 class="section-title">📊 Dashboard</h2>
+        <div class="welcome-text">
+            Welcome back, <strong>${currentUser.username}</strong>!
+            <c:if test="${not empty currentUser.companyName}">
+                <br><small>${currentUser.companyName}</small>
+            </c:if>
         </div>
-        <nav class="nav flex-column">
-            <a class="nav-link active" href="${pageContext.request.contextPath}/BookServlet?action=dashboard">
-                <i class="fas fa-tachometer-alt"></i>
-                <span>Dashboard</span>
-            </a>
-            <a class="nav-link" href="${pageContext.request.contextPath}/BookServlet?action=list">
+    </div>
+
+    <hr />
+
+    <!-- Display Success/Error Messages -->
+    <c:if test="${not empty successMessage}">
+        <div class="success-message">
+            <i class="fas fa-check-circle"></i> ${successMessage}
+        </div>
+    </c:if>
+
+    <c:if test="${not empty errorMessage}">
+        <div class="error-message">
+            <i class="fas fa-exclamation-circle"></i> ${errorMessage}
+        </div>
+    </c:if>
+
+    <!-- Dashboard Statistics Cards -->
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <div class="stat-icon">
                 <i class="fas fa-book"></i>
-                <span>Books</span>
+            </div>
+            <div class="stat-content">
+                <h3>${totalBooks}</h3>
+                <p>Total Books</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-tags"></i>
+            </div>
+            <div class="stat-content">
+                <h3>${totalCategories}</h3>
+                <p>Categories</p>
+            </div>
+        </div>
+
+        <div class="stat-card warning">
+            <div class="stat-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-content">
+                <h3>${lowStockCount}</h3>
+                <p>Low Stock Items</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-user-tie"></i>
+            </div>
+            <div class="stat-content">
+                <h3>${currentUser.role}</h3>
+                <p>Your Role</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+            <a href="${pageContext.request.contextPath}/BookServlet?action=books" class="action-btn">
+                <i class="fas fa-book"></i>
+                <span>Manage Books</span>
             </a>
-            <a class="nav-link" href="${pageContext.request.contextPath}/BillingServlet?action=invoices">
+            <a href="${pageContext.request.contextPath}/BillingServlet?action=newInvoice" class="action-btn">
+                <i class="fas fa-plus-square"></i>
+                <span>New Invoice</span>
+            </a>
+            <a href="${pageContext.request.contextPath}/BillingServlet?action=invoices" class="action-btn">
                 <i class="fas fa-file-invoice"></i>
-                <span>Billing</span>
+                <span>View Invoices</span>
             </a>
-            <% if ("manager".equals(currentUser.getRole())) { %>
-            <a class="nav-link" href="${pageContext.request.contextPath}/ClientServlet?action=list">
-                <i class="fas fa-users"></i>
-                <span>Clients</span>
-            </a>
-            <% } %>
-            <a class="nav-link" href="${pageContext.request.contextPath}/profile.jsp">
-                <i class="fas fa-user-cog"></i>
-                <span>Profile</span>
-            </a>
-        </nav>
-        
-        <!-- User Info -->
-        <div class="mt-auto p-3" style="position: absolute; bottom: 0; width: 100%;">
-            <div class="d-flex align-items-center text-white">
-                <div class="avatar-circle me-2" style="width: 40px; height: 40px; background: linear-gradient(135deg, #3498db, #2980b9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <div class="fw-bold small text-truncate">
-                        <span><%= currentUser.getUsername() %></span>
-                    </div>
-                    <div class="small text-muted text-truncate">
-                        <span><%= currentUser.getRole() %></span>
-                    </div>
-                </div>
-            </div>
-            <a href="${pageContext.request.contextPath}/AuthServlet?action=logout" 
-               class="btn btn-outline-light btn-sm w-100 mt-2">
-                <i class="fas fa-sign-out-alt me-1"></i>
-                <span>Logout</span>
+            <a href="${pageContext.request.contextPath}/BillingServlet?action=report" class="action-btn">
+                <i class="fas fa-chart-bar"></i>
+                <span>Reports</span>
             </a>
         </div>
     </div>
-    
-    <!-- Main Content -->
-    <div class="main-content" id="mainContent">
-        <!-- Top Navbar -->
-        <nav class="navbar navbar-expand-lg">
-            <div class="container-fluid">
-                <button class="btn btn-link text-white me-3" id="sidebarToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <span class="navbar-brand mb-0 h1">
-                    <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                </span>
-                <div class="navbar-nav ms-auto">
-                    <span class="nav-link text-white">
-                        <i class="fas fa-calendar-alt me-2"></i><%= currentDate %>
-                    </span>
+
+    <!-- Recent Activity Sections -->
+    <div class="dashboard-content">
+        <!-- Low Stock Alert -->
+        <c:if test="${not empty lowStockBooks}">
+            <div class="dashboard-section">
+                <h3><i class="fas fa-exclamation-triangle"></i> Low Stock Alert</h3>
+                <div class="table-container">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <c:forEach var="book" items="${recentBooks}" varStatus="status">
+                                <c:if test="${status.index < 10}"> <!-- Show only first 10 recent books -->
+                                    <tr>
+                                        <td>${book.title}</td>
+                                        <td>${book.author}</td>
+                                        <td>${book.category}</td>
+                                        <td>Rs. ${book.price}</td>
+                                        <td>${book.quantity}</td>
+                                    </tr>
+                                </c:if>
+                            </c:forEach>
+                        </tbody>
+                    </table>
+                    <c:if test="${fn:length(recentBooks) > 10}">
+                        <p class="table-footer">
+                            <a href="${pageContext.request.contextPath}/BookServlet?action=books">
+                                View all books →
+                            </a>
+                        </p>
+                    </c:if>
                 </div>
             </div>
-        </nav>
-        
-        <!-- Page Content -->
-        <div class="container-fluid p-4">
-            <!-- Success Message -->
-            <% if (successMessage != null) { %>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <%= successMessage %>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </c:if>
+    </div>
+
+    <!-- System Information (for managers) -->
+    <c:if test="${isManager}">
+        <div class="dashboard-section system-info">
+            <h3><i class="fas fa-info-circle"></i> System Information</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>User:</strong> ${currentUser.username}
                 </div>
-            <% } %>
-            
-            <!-- Welcome Message -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card stats-card">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="stats-icon books me-3">
-                                    <i class="fas fa-hand-wave"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h4 class="mb-1">Welcome back, <%= currentUser.getUsername() %>!</h4>
-                                    <p class="text-muted mb-0">
-                                        Here's what's happening with your Pahana Edu system today.
-                                        <% if (currentUser.getCompanyName() != null) { %>
-                                            Managing <strong><%= currentUser.getCompanyName() %></strong>
-                                        <% } %>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                <div class="info-item">
+                    <strong>Role:</strong> ${currentUser.role}
+                </div>
+                <c:if test="${not empty currentUser.email}">
+                    <div class="info-item">
+                        <strong>Email:</strong> ${currentUser.email}
                     </div>
-                </div>
-            </div>
-            
-            <!-- Stats Cards -->
-            <div class="row mb-4">
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="card stats-card h-100">
-                        <div class="card-body d-flex align-items-center">
-                            <div class="stats-icon books me-3">
-                                <i class="fas fa-book"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">0</h3>
-                                <p class="text-muted mb-0 small">Total Books</p>
-                            </div>
-                        </div>
+                </c:if>
+                <c:if test="${not empty currentUser.companyName}">
+                    <div class="info-item">
+                        <strong>Company:</strong> ${currentUser.companyName}
                     </div>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="card stats-card h-100">
-                        <div class="card-body d-flex align-items-center">
-                            <div class="stats-icon invoices me-3">
-                                <i class="fas fa-file-invoice"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">0</h3>
-                                <p class="text-muted mb-0 small">Total Invoices</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <% if ("manager".equals(currentUser.getRole())) { %>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="card stats-card h-100">
-                        <div class="card-body d-flex align-items-center">
-                            <div class="stats-icon clients me-3">
-                                <i class="fas fa-users"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">0</h3>
-                                <p class="text-muted mb-0 small">Active Clients</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="card stats-card h-100">
-                        <div class="card-body d-flex align-items-center">
-                            <div class="stats-icon revenue me-3">
-                                <i class="fas fa-dollar-sign"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">$0</h3>
-                                <p class="text-muted mb-0 small">Total Revenue</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <% } else { %>
-                <div class="col-lg-6 col-md-6 mb-3">
-                    <div class="card stats-card h-100">
-                        <div class="card-body d-flex align-items-center">
-                            <div class="stats-icon revenue me-3">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">Recent</h3>
-                                <p class="text-muted mb-0 small">Last Login</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <% } %>
-            </div>
-            
-            <!-- Quick Actions -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card chart-card">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-bolt me-2"></i>Quick Actions
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-lg-4 col-md-6 mb-3">
-                                    <a href="${pageContext.request.contextPath}/BookServlet?action=add" class="quick-action-btn books">
-                                        <i class="fas fa-plus-circle me-2"></i>Add New Book
-                                    </a>
-                                </div>
-                                <div class="col-lg-4 col-md-6 mb-3">
-                                    <a href="${pageContext.request.contextPath}/BillingServlet?action=create" class="quick-action-btn invoices">
-                                        <i class="fas fa-file-invoice me-2"></i>Create Invoice
-                                    </a>
-                                </div>
-                                <% if ("manager".equals(currentUser.getRole())) { %>
-                                <div class="col-lg-4 col-md-6 mb-3">
-                                    <a href="${pageContext.request.contextPath}/ClientServlet?action=add" class="quick-action-btn clients">
-                                        <i class="fas fa-user-plus me-2"></i>Add Client
-                                    </a>
-                                </div>
-                                <% } %>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Recent Activity & Charts -->
-            <div class="row">
-                <div class="col-lg-6 mb-4">
-                    <div class="card chart-card">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-chart-line me-2"></i>Monthly Overview
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="text-center py-5">
-                                <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                                <h6 class="text-muted">Charts will appear here</h6>
-                                <p class="small text-muted">Once you start adding books and creating invoices</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-6 mb-4">
-                    <div class="card chart-card">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-clock me-2"></i>Recent Activity
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="recent-activity">
-                                <div class="activity-item">
-                                    <div class="activity-icon login">
-                                        <i class="fas fa-sign-in-alt"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <div class="fw-bold">System Login</div>
-                                        <div class="small text-muted">Welcome to Pahana Edu!</div>
-                                        <div class="small text-muted">Just now</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="text-center py-4">
-                                    <i class="fas fa-history fa-2x text-muted mb-3"></i>
-                                    <p class="text-muted mb-0">No recent activity</p>
-                                    <p class="small text-muted">Activity will appear here as you use the system</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                </c:if>
             </div>
         </div>
-    </div>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Sidebar toggle functionality
-        document.getElementById('sidebarToggle').addEventListener('click', function() {
-            const sidebar = document.getElementById('sidebar');
-            const mainContent = document.getElementById('mainContent');
-            
-            sidebar.classList.toggle('collapsed');
-            mainContent.classList.toggle('expanded');
-        });
-        
-        // Auto-dismiss alerts
+    </c:if>
+</main>
+
+<script>
+    // Auto-hide success/error messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
-            const alerts = document.querySelectorAll('.alert-dismissible');
-            alerts.forEach(function(alert) {
-                const bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            });
+            var successMsg = document.querySelector('.success-message');
+            var errorMsg = document.querySelector('.error-message');
+            
+            if (successMsg) {
+                successMsg.style.transition = 'opacity 0.3s';
+                successMsg.style.opacity = '0';
+                setTimeout(function() { 
+                    successMsg.style.display = 'none'; 
+                }, 300);
+            }
+            
+            if (errorMsg) {
+                errorMsg.style.transition = 'opacity 0.3s';
+                errorMsg.style.opacity = '0';
+                setTimeout(function() { 
+                    errorMsg.style.display = 'none'; 
+                }, 300);
+            }
         }, 5000);
-        
-        // Add loading states for quick action buttons
-        document.querySelectorAll('.quick-action-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const originalText = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-                this.style.pointerEvents = 'none';
-                
-                // Re-enable after a short delay (in case of redirect issues)
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.style.pointerEvents = 'auto';
-                }, 3000);
-            });
-        });
-    </script>
+    });
+
+    // Refresh dashboard data periodically (every 5 minutes)
+    setInterval(function() {
+        // Only refresh if user is still active (optional)
+        if (document.visibilityState === 'visible') {
+            location.reload();
+        }
+    }, 300000); // 5 minutes
+</script>
+
+<style>
+    /* Dashboard specific styles */
+    .dashboard-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin: 20px 0;
+    }
+
+    .stat-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        border-left: 4px solid #007bff;
+    }
+
+    .stat-card.warning {
+        border-left-color: #ffc107;
+    }
+
+    .stat-icon {
+        font-size: 2.5em;
+        margin-right: 15px;
+        color: #007bff;
+    }
+
+    .stat-card.warning .stat-icon {
+        color: #ffc107;
+    }
+
+    .stat-content h3 {
+        margin: 0;
+        font-size: 2em;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .stat-content p {
+        margin: 5px 0 0 0;
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    .quick-actions {
+        margin: 30px 0;
+    }
+
+    .quick-actions h3 {
+        margin-bottom: 15px;
+        color: #333;
+    }
+
+    .action-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .action-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+    .action-btn:hover {
+        background: #007bff;
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+    }
+
+    .action-btn i {
+        font-size: 2em;
+        margin-bottom: 10px;
+    }
+
+    .dashboard-content {
+        display: grid;
+        gap: 30px;
+        margin-top: 30px;
+    }
+
+    .dashboard-section {
+        background: #fff;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .dashboard-section h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #333;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
+    }
+
+    .dashboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    .dashboard-table th,
+    .dashboard-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+
+    .dashboard-table th {
+        background: #f8f9fa;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .stock-warning {
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    .btn-small {
+        padding: 5px 10px;
+        background: #007bff;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 0.85em;
+    }
+
+    .btn-small:hover {
+        background: #0056b3;
+    }
+
+    .table-footer,
+    .section-footer {
+        text-align: center;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+
+    .table-footer a,
+    .section-footer a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .table-footer a:hover,
+    .section-footer a:hover {
+        text-decoration: underline;
+    }
+
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .category-item {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 15px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .category-item:hover {
+        background: #e9ecef;
+        transform: translateY(-2px);
+    }
+
+    .category-item a {
+        text-decoration: none;
+        color: #333;
+        display: block;
+    }
+
+    .category-item i {
+        display: block;
+        font-size: 1.5em;
+        margin-bottom: 8px;
+        color: #007bff;
+    }
+
+    .system-info .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .info-item {
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+
+    .welcome-text {
+        font-size: 1.1em;
+        color: #333;
+    }
+
+    .welcome-text strong {
+        color: #007bff;
+    }
+
+    .welcome-text small {
+        color: #666;
+        font-size: 0.9em;
+    }
+</style>
+
 </body>
 </html>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Category</th>
+                                <th>Stock</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <c:forEach var="book" items="${lowStockBooks}" varStatus="status">
+                                <c:if test="${status.index < 5}"> <!-- Show only first 5 -->
+                                    <tr>
+                                        <td>${book.title}</td>
+                                        <td>${book.author}</td>
+                                        <td>${book.category}</td>
+                                        <td class="stock-warning">${book.quantity}</td>
+                                        <td>
+                                            <a href="${pageContext.request.contextPath}/BookServlet?action=books" class="btn-small">
+                                                Update Stock
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </c:if>
+                            </c:forEach>
+                        </tbody>
+                    </table>
+                    <c:if test="${fn:length(lowStockBooks) > 5}">
+                        <p class="table-footer">
+                            <a href="${pageContext.request.contextPath}/BookServlet?action=books">
+                                View all ${fn:length(lowStockBooks)} low stock items →
+                            </a>
+                        </p>
+                    </c:if>
+                </div>
+            </div>
+
+
+        <!-- Categories Overview -->
+        <c:if test="${not empty categories}">
+            <div class="dashboard-section">
+                <h3><i class="fas fa-tags"></i> Categories Overview</h3>
+                <div class="category-grid">
+                    <c:forEach var="category" items="${categories}" varStatus="status">
+                        <c:if test="${status.index < 8}"> <!-- Show only first 8 categories -->
+                            <div class="category-item">
+                                <a href="${pageContext.request.contextPath}/BookServlet?action=books&category=${category}">
+                                    <i class="fas fa-folder"></i>
+                                    <span>${category}</span>
+                                </a>
+                            </div>
+                        </c:if>
+                    </c:forEach>
+                </div>
+                <c:if test="${fn:length(categories) > 8}">
+                    <p class="section-footer">
+                        <a href="${pageContext.request.contextPath}/BookServlet?action=books">
+                            View all categories →
+                        </a>
+                    </p>
+                </c:if>
+            </div>
+        </c:if>
+     </body>
+</html>
+        
