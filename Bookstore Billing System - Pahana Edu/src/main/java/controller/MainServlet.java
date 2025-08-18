@@ -26,7 +26,7 @@ public class MainServlet extends HttpServlet {
     public void init() throws ServletException {
         super.init();
         System.out.println("🚀 MainServlet: Initializing...");
-        
+
         userDAO = new UserDAO();
 
         try {
@@ -36,14 +36,14 @@ public class MainServlet extends HttpServlet {
             System.err.println("❌ MainServlet: Error creating default admin: " + e.getMessage());
             e.printStackTrace();
         }
-        
+
         System.out.println("✅ MainServlet: Initialization complete");
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         System.out.println("🔄 MainServlet: Processing GET request");
         System.out.println("📍 MainServlet: Request URI = " + request.getRequestURI());
         System.out.println("📍 MainServlet: Context Path = " + request.getContextPath());
@@ -65,16 +65,14 @@ public class MainServlet extends HttpServlet {
             // Set user attributes for JSP access
             request.setAttribute("currentUser", user);
             request.setAttribute("isManager", "manager".equals(user.getRole()));
-            
-            // Route based on role
+
+            // Route based on role - REDIRECT instead of FORWARD
             if ("manager".equals(user.getRole())) {
-                System.out.println("🔄 MainServlet: Forwarding manager to dashboard");
-                // Forward to dashboard servlet to load data, then display books page
-                request.getRequestDispatcher("/DashboardServlet?action=dashboard").forward(request, response);
+                System.out.println("🔄 MainServlet: Redirecting manager to dashboard");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet?action=dashboard");
             } else {
-                System.out.println("🔄 MainServlet: Forwarding user to invoices");
-                // Forward to billing servlet to load invoices
-                request.getRequestDispatcher("/BillingServlet?action=invoices").forward(request, response);
+                System.out.println("🔄 MainServlet: Redirecting user to invoices");
+                response.sendRedirect(request.getContextPath() + "/BillingServlet?action=invoices");
             }
         } else {
             System.out.println("🔄 MainServlet: No authenticated user, forwarding to login");

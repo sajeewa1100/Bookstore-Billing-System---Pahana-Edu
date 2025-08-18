@@ -40,7 +40,7 @@ public class DashboardServlet extends HttpServlet {
         // Ensure user is authenticated
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("user") == null) {
-            response.sendRedirect(request.getContextPath() + "/views/dashboard.jsp?error=Please login to access this page");
+            response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=Please login to access this page");
             return;
         }
 
@@ -103,8 +103,8 @@ public class DashboardServlet extends HttpServlet {
             System.out.println("📊 DashboardServlet: Dashboard data loaded successfully");
             System.out.println("📊 Total Books: " + totalBooks + ", Categories: " + categories.size());
             
-            // Forward to dashboard JSP
-            request.getRequestDispatcher("/views/login.jsp").forward(request, response);
+            // FIXED: Forward to dashboard JSP instead of login.jsp
+            request.getRequestDispatcher("/views/dashboard.jsp").forward(request, response);
             
         } catch (Exception e) {
             System.err.println("❌ DashboardServlet: Error loading dashboard data: " + e.getMessage());

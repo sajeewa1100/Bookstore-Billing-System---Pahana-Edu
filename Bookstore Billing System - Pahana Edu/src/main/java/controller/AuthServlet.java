@@ -136,9 +136,10 @@ public class AuthServlet extends HttpServlet {
             if ("manager".equals(user.getRole()) && user.isFirstLogin()) {
                 response.sendRedirect("AuthServlet?action=firstTimeSetup");
             } else {
-                // Redirect based on role
+                // FIXED: Redirect based on role - GO TO DASHBOARD FOR MANAGERS
                 if ("manager".equals(user.getRole())) {
-                    response.sendRedirect("BookServlet?action=dashboard");
+                    System.out.println("🔄 AuthServlet: Redirecting manager to DashboardServlet");
+                    response.sendRedirect("DashboardServlet?action=dashboard"); // CHANGED FROM BookServlet
                 } else {
                     response.sendRedirect("BillingServlet?action=invoices");
                 }
