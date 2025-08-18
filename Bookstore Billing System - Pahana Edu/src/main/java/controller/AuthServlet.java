@@ -12,26 +12,36 @@ import java.sql.SQLException;
 
 import model.User;
 import dao.UserDAO;
+import service.AuthService;
 import util.PasswordUtils;
-import util.EmailUtils;
+import util.ValidationUtil;
 
 @WebServlet("/AuthServlet")
 public class AuthServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private UserDAO userDAO;
+    private AuthService authService;
 
     @Override
     public void init() throws ServletException {
         super.init();
         userDAO = new UserDAO();
+        authService = new AuthService();
+        
+        // Create default admin if not exists
+        try {
+            userDAO.createDefaultAdmin();
+        } catch (SQLException e) {
+            System.err.println("Failed to create default admin: " + e.getMessage());
+        }
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String action = request.getParameter("action");
-        
+
         if (action == null) {
-            response.sendRedirect("views/index.jsp");
+            response.sendRedirect("views/login.jsp");
             return;
         }
 
@@ -46,7 +56,7 @@ public class AuthServlet extends HttpServlet {
                 handleFirstTimeSetupPage(request, response);
                 break;
             default:
-                response.sendRedirect("views/index.jsp");
+                response.sendRedirect("views/login.jsp");
                 break;
         }
     }
@@ -56,7 +66,7 @@ public class AuthServlet extends HttpServlet {
         String action = request.getParameter("action");
 
         if (action == null) {
-            response.sendRedirect("views/index.jsp");
+            response.sendRedirect("views/login.jsp");
             return;
         }
 
@@ -77,7 +87,7 @@ public class AuthServlet extends HttpServlet {
                 handleChangePassword(request, response);
                 break;
             default:
-                response.sendRedirect("views/index.jsp");
+                response.sendRedirect("views/login.jsp");
                 break;
         }
     }
@@ -88,78 +98,61 @@ public class AuthServlet extends HttpServlet {
         String password = request.getParameter("password");
         String rememberMe = request.getParameter("rememberMe");
 
-        // Validate input
+        // Basic validation
         if (username == null || username.trim().isEmpty() || 
             password == null || password.trim().isEmpty()) {
             request.setAttribute("error", "Username and password are required");
-            request.getRequestDispatcher("views/index.jsp").forward(request, response);
+            request.getRequestDispatcher("views/login.jsp").forward(request, response);
             return;
         }
 
-        try {
-            User user = userDAO.authenticateUser(username.trim(), password);
+        // Get client IP
+        String clientIP = getClientIP(request);
+        
+        // Use AuthService for authentication with security features
+        AuthService.AuthResult authResult = authService.authenticateUser(username.trim(), password, clientIP);
+        
+        if (authResult.isSuccess()) {
+            User user = authResult.getUser();
             
-            if (user != null) {
-                // Check if account is active
-                if (!"active".equals(user.getStatus())) {
-                    request.setAttribute("error", "Your account has been deactivated. Please contact administrator.");
-                    request.getRequestDispatcher("views/index.jsp").forward(request, response);
-                    return;
-                }
+            // Create session
+            HttpSession session = request.getSession();
+            session.setMaxInactiveInterval(1800); // 30 minutes
+            session.setAttribute("user", user);
+            session.setAttribute("username", user.getUsername());
+            session.setAttribute("role", user.getRole());
+            session.setAttribute("userId", user.getUserId());
 
-                // Create session
-                HttpSession session = request.getSession();
-                session.setMaxInactiveInterval(1800); // 30 minutes
-                session.setAttribute("user", user);
-                session.setAttribute("username", user.getUsername());
-                session.setAttribute("role", user.getRole());
-                session.setAttribute("userId", user.getUserId());
-
-                // Update last login
-                userDAO.updateLastLogin(user.getUserId());
-
-                // Handle remember me
-                if ("true".equals(rememberMe)) {
-                    Cookie userCookie = new Cookie("rememberedUser", username);
-                    userCookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
-                    userCookie.setPath("/");
-                    response.addCookie(userCookie);
-                }
-
-                // Log successful login
-                userDAO.logActivity(user.getUserId(), "LOGIN", "User logged in successfully");
-
-                // Check if first time login for manager
-                if ("manager".equals(user.getRole()) && user.isFirstLogin()) {
-                    response.sendRedirect("AuthServlet?action=firstTimeSetup");
-                } else {
-                    // Redirect based on role
-                    if ("manager".equals(user.getRole())) {
-                        response.sendRedirect("BookServlet?action=dashboard");
-                    } else {
-                        response.sendRedirect("BillingServlet?action=invoices");
-                    }
-                }
-            } else {
-                // Log failed login attempt
-                try {
-                    User existingUser = userDAO.findByUsername(username.trim());
-                    if (existingUser != null) {
-                        userDAO.logActivity(existingUser.getUserId(), "LOGIN_FAILED", 
-                                          "Failed login attempt - incorrect password");
-                    }
-                } catch (SQLException e) {
-                    // Continue without logging if there's an error
-                }
-
-                request.setAttribute("error", "Invalid username or password");
-                request.setAttribute("username", username);
-                request.getRequestDispatcher("views/index.jsp").forward(request, response);
+            // Handle remember me
+            if ("true".equals(rememberMe)) {
+                Cookie userCookie = new Cookie("rememberedUser", username);
+                userCookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
+                userCookie.setPath("/");
+                userCookie.setHttpOnly(true); // Security enhancement
+                response.addCookie(userCookie);
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("error", "System error occurred. Please try again.");
-            request.getRequestDispatcher("views/index.jsp").forward(request, response);
+
+            // Check if first time login for manager
+            if ("manager".equals(user.getRole()) && user.isFirstLogin()) {
+                response.sendRedirect("AuthServlet?action=firstTimeSetup");
+            } else {
+                // Redirect based on role
+                if ("manager".equals(user.getRole())) {
+                    response.sendRedirect("BookServlet?action=dashboard");
+                } else {
+                    response.sendRedirect("BillingServlet?action=invoices");
+                }
+            }
+        } else {
+            // Handle authentication failure
+            if (authResult.isAccountLocked()) {
+                request.setAttribute("error", authResult.getMessage());
+                request.setAttribute("lockoutTime", authResult.getRemainingLockoutMinutes());
+            } else {
+                request.setAttribute("error", authResult.getMessage());
+            }
+            request.setAttribute("username", username);
+            request.getRequestDispatcher("views/login.jsp").forward(request, response);
         }
     }
 
@@ -172,9 +165,10 @@ public class AuthServlet extends HttpServlet {
             User user = (User) session.getAttribute("user");
             if (user != null) {
                 try {
-                    userDAO.logActivity(user.getUserId(), "LOGOUT", "User logged out");
+                    userDAO.logActivity(user.getUserId(), "LOGOUT", "User logged out from IP: " + 
+                                      getClientIP(request));
                 } catch (SQLException e) {
-                    e.printStackTrace();
+                    System.err.println("Failed to log logout: " + e.getMessage());
                 }
             }
             
@@ -187,7 +181,7 @@ public class AuthServlet extends HttpServlet {
         userCookie.setPath("/");
         response.addCookie(userCookie);
 
-        response.sendRedirect("views/index.jsp?message=You have been logged out successfully");
+        response.sendRedirect("views/login.jsp?message=You have been logged out successfully");
     }
 
     private void handleForgotPassword(HttpServletRequest request, HttpServletResponse response)
@@ -196,45 +190,26 @@ public class AuthServlet extends HttpServlet {
 
         if (resetUsername == null || resetUsername.trim().isEmpty()) {
             request.setAttribute("error", "Username is required");
-            request.getRequestDispatcher("views/index.jsp").forward(request, response);
+            request.getRequestDispatcher("views/login.jsp").forward(request, response);
             return;
         }
 
-        try {
-            User user = userDAO.findByUsername(resetUsername.trim());
-            
-            if (user != null && "manager".equals(user.getRole()) && user.getEmail() != null) {
-                // Generate reset token
-                String resetToken = PasswordUtils.generateResetToken();
-                userDAO.savePasswordResetToken(user.getUserId(), resetToken);
+        // Create base URL for reset link
+        String baseUrl = request.getScheme() + "://" + 
+                        request.getServerName() + ":" + 
+                        request.getServerPort() + 
+                        request.getContextPath();
 
-                // Send reset email
-                String resetLink = request.getScheme() + "://" + 
-                                 request.getServerName() + ":" + 
-                                 request.getServerPort() + 
-                                 request.getContextPath() + 
-                                 "/AuthServlet?action=resetPassword&token=" + resetToken;
-
-                boolean emailSent = EmailUtils.sendPasswordResetEmail(user.getEmail(), user.getUsername(), resetLink);
-
-                if (emailSent) {
-                    // Log password reset request
-                    userDAO.logActivity(user.getUserId(), "PASSWORD_RESET_REQUEST", 
-                                      "Password reset link sent to email");
-                    
-                    request.setAttribute("success", "Password reset link has been sent to your registered email address");
-                } else {
-                    request.setAttribute("error", "Failed to send reset email. Please try again later.");
-                }
-            } else {
-                request.setAttribute("error", "Username not found, not a manager account, or no email registered");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("error", "System error occurred. Please try again.");
+        // Use AuthService for password reset
+        ValidationUtil.ValidationResult result = authService.initiatePasswordReset(resetUsername.trim(), baseUrl);
+        
+        if (result.isValid()) {
+            request.setAttribute("success", "If an account with that username exists and has an email address, a password reset link has been sent.");
+        } else {
+            request.setAttribute("error", result.getFirstError());
         }
 
-        request.getRequestDispatcher("views/index.jsp").forward(request, response);
+        request.getRequestDispatcher("views/login.jsp").forward(request, response);
     }
 
     private void handlePasswordResetPage(HttpServletRequest request, HttpServletResponse response)
@@ -242,20 +217,20 @@ public class AuthServlet extends HttpServlet {
         String token = request.getParameter("token");
         
         if (token == null || token.trim().isEmpty()) {
-            response.sendRedirect("views/index.jsp?error=Invalid reset link");
+            response.sendRedirect("views/login.jsp?error=Invalid reset link");
             return;
         }
 
         try {
             if (userDAO.isValidResetToken(token)) {
                 request.setAttribute("resetToken", token);
-                request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
+                request.getRequestDispatcher("views/resetPassword.jsp").forward(request, response);
             } else {
-                response.sendRedirect("views/index.jsp?error=Invalid or expired reset link");
+                response.sendRedirect("views/login.jsp?error=Invalid or expired reset link");
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            response.sendRedirect("views/index.jsp?error=System error occurred");
+            System.err.println("Database error checking reset token: " + e.getMessage());
+            response.sendRedirect("views/login.jsp?error=System error occurred");
         }
     }
 
@@ -265,50 +240,15 @@ public class AuthServlet extends HttpServlet {
         String newPassword = request.getParameter("newPassword");
         String confirmPassword = request.getParameter("confirmPassword");
 
-        // Validate input
-        if (token == null || newPassword == null || confirmPassword == null ||
-            token.trim().isEmpty() || newPassword.trim().isEmpty() || confirmPassword.trim().isEmpty()) {
-            request.setAttribute("error", "All fields are required");
+        // Use AuthService for password reset completion
+        ValidationUtil.ValidationResult result = authService.completePasswordReset(token, newPassword, confirmPassword);
+        
+        if (result.isValid()) {
+            response.sendRedirect("views/login.jsp?success=Password reset successfully. Please login with your new password.");
+        } else {
+            request.setAttribute("error", result.getFirstError());
             request.setAttribute("resetToken", token);
-            request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
-            return;
-        }
-
-        if (!newPassword.equals(confirmPassword)) {
-            request.setAttribute("error", "Passwords do not match");
-            request.setAttribute("resetToken", token);
-            request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
-            return;
-        }
-
-        // Validate password strength
-        PasswordUtils.PasswordStrength strength = PasswordUtils.checkPasswordStrength(newPassword);
-        if (strength.isWeak()) {
-            request.setAttribute("error", "Password is too weak. " + strength.getMessage());
-            request.setAttribute("resetToken", token);
-            request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
-            return;
-        }
-
-        try {
-            if (userDAO.isValidResetToken(token)) {
-                String hashedPassword = PasswordUtils.hashPassword(newPassword);
-                int userId = userDAO.resetPassword(token, hashedPassword);
-                
-                // Log password reset completion
-                if (userId > 0) {
-                    userDAO.logActivity(userId, "PASSWORD_RESET_COMPLETE", "Password reset successfully completed");
-                }
-                
-                response.sendRedirect("views/index.jsp?success=Password reset successfully. Please login with your new password.");
-            } else {
-                request.setAttribute("error", "Invalid or expired reset token");
-                request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("error", "System error occurred. Please try again.");
-            request.getRequestDispatcher("resetPassword.jsp").forward(request, response);
+            request.getRequestDispatcher("views/resetPassword.jsp").forward(request, response);
         }
     }
 
@@ -317,7 +257,7 @@ public class AuthServlet extends HttpServlet {
         HttpSession session = request.getSession(false);
         
         if (session == null || session.getAttribute("user") == null) {
-            response.sendRedirect("views/index.jsp?error=Session expired. Please login again.");
+            response.sendRedirect("views/login.jsp?error=Session expired. Please login again.");
             return;
         }
 
@@ -327,7 +267,7 @@ public class AuthServlet extends HttpServlet {
             return;
         }
 
-        request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
+        request.getRequestDispatcher("views/firstTimeSetup.jsp").forward(request, response);
     }
 
     private void handleFirstTimeSetup(HttpServletRequest request, HttpServletResponse response)
@@ -335,7 +275,7 @@ public class AuthServlet extends HttpServlet {
         HttpSession session = request.getSession(false);
         
         if (session == null || session.getAttribute("user") == null) {
-            response.sendRedirect("views/index.jsp?error=Session expired. Please login again.");
+            response.sendRedirect("views/login.jsp?error=Session expired. Please login again.");
             return;
         }
 
@@ -350,76 +290,17 @@ public class AuthServlet extends HttpServlet {
         String email = request.getParameter("email");
         String companyName = request.getParameter("companyName");
 
-        // Validate input
-        if (newPassword == null || confirmPassword == null || email == null ||
-            newPassword.trim().isEmpty() || confirmPassword.trim().isEmpty() || email.trim().isEmpty()) {
-            request.setAttribute("error", "Password, confirm password, and email are required fields");
-            request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
-            return;
-        }
-
-        if (!newPassword.equals(confirmPassword)) {
-            request.setAttribute("error", "Passwords do not match");
-            request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
-            return;
-        }
-
-        // Validate password strength
-        PasswordUtils.PasswordStrength strength = PasswordUtils.checkPasswordStrength(newPassword);
-        if (strength.isWeak()) {
-            request.setAttribute("error", "Password is too weak. " + strength.getMessage());
-            request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
-            return;
-        }
-
-        if (!isValidEmail(email)) {
-            request.setAttribute("error", "Please enter a valid email address");
-            request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
-            return;
-        }
-
-        try {
-            // Check if email is already used by another manager
-            User existingEmailUser = userDAO.findByEmail(email.trim());
-            if (existingEmailUser != null && existingEmailUser.getUserId() != user.getUserId()) {
-                request.setAttribute("error", "This email is already registered with another account");
-                request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
-                return;
-            }
-
-            String hashedPassword = PasswordUtils.hashPassword(newPassword);
-            userDAO.completeFirstTimeSetup(user.getUserId(), hashedPassword, email.trim(), 
-                                         companyName != null ? companyName.trim() : null);
-
+        // Use AuthService for first-time setup
+        ValidationUtil.ValidationResult result = authService.completeFirstTimeSetup(
+            user, newPassword, confirmPassword, email, companyName);
+        
+        if (result.isValid()) {
             // Update session with new information
-            user.setEmail(email.trim());
-            user.setFirstLogin(false);
-            if (companyName != null && !companyName.trim().isEmpty()) {
-                user.setCompanyName(companyName.trim());
-            }
             session.setAttribute("user", user);
-
-            // Log successful first-time setup
-            userDAO.logActivity(user.getUserId(), "FIRST_TIME_SETUP", 
-                              "Completed first time setup - password updated and email configured");
-
-            // Send welcome email (optional)
-            try {
-                String welcomeMessage = "Your Pahana Edu manager account setup has been completed successfully. " +
-                                      "You can now access all system features including user management, " +
-                                      "billing operations, and system reports.";
-                // This could be expanded to send a proper welcome email
-            } catch (Exception e) {
-                // Log but don't fail the setup if email fails
-                System.err.println("Failed to send welcome email: " + e.getMessage());
-            }
-
             response.sendRedirect("BookServlet?action=dashboard&success=Setup completed successfully! Welcome to Pahana Edu.");
-            
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("error", "System error occurred during setup. Please try again.");
-            request.getRequestDispatcher("firstTimeSetup.jsp").forward(request, response);
+        } else {
+            request.setAttribute("error", result.getFirstError());
+            request.getRequestDispatcher("views/firstTimeSetup.jsp").forward(request, response);
         }
     }
 
@@ -428,7 +309,7 @@ public class AuthServlet extends HttpServlet {
         HttpSession session = request.getSession(false);
         
         if (session == null || session.getAttribute("user") == null) {
-            response.sendRedirect("views/index.jsp");
+            response.sendRedirect("views/login.jsp");
             return;
         }
 
@@ -437,103 +318,33 @@ public class AuthServlet extends HttpServlet {
         String newPassword = request.getParameter("newPassword");
         String confirmPassword = request.getParameter("confirmPassword");
 
-        // Validate input
-        if (currentPassword == null || newPassword == null || confirmPassword == null ||
-            currentPassword.trim().isEmpty() || newPassword.trim().isEmpty() || confirmPassword.trim().isEmpty()) {
-            request.setAttribute("error", "All fields are required");
-            request.getRequestDispatcher("profile.jsp").forward(request, response);
-            return;
-        }
-
-        if (!newPassword.equals(confirmPassword)) {
-            request.setAttribute("error", "New passwords do not match");
-            request.getRequestDispatcher("profile.jsp").forward(request, response);
-            return;
-        }
-
-        // Validate password strength
-        PasswordUtils.PasswordStrength strength = PasswordUtils.checkPasswordStrength(newPassword);
-        if (strength.isWeak()) {
-            request.setAttribute("error", "New password is too weak. " + strength.getMessage());
-            request.getRequestDispatcher("profile.jsp").forward(request, response);
-            return;
-        }
-
-        try {
-            // Verify current password
-            User authenticatedUser = userDAO.authenticateUser(user.getUsername(), currentPassword);
-            if (authenticatedUser == null) {
-                request.setAttribute("error", "Current password is incorrect");
-                request.getRequestDispatcher("profile.jsp").forward(request, response);
-                return;
-            }
-
-            // Check if new password is same as current
-            if (currentPassword.equals(newPassword)) {
-                request.setAttribute("error", "New password must be different from current password");
-                request.getRequestDispatcher("profile.jsp").forward(request, response);
-                return;
-            }
-
-            // Update password
-            String hashedPassword = PasswordUtils.hashPassword(newPassword);
-            userDAO.updatePassword(user.getUserId(), hashedPassword);
-
-            // Log activity
-            userDAO.logActivity(user.getUserId(), "PASSWORD_CHANGE", "Password changed successfully");
-
+        // Use AuthService for password change
+        ValidationUtil.ValidationResult result = authService.changePassword(
+            user, currentPassword, newPassword, confirmPassword);
+        
+        if (result.isValid()) {
             request.setAttribute("success", "Password changed successfully");
-            request.getRequestDispatcher("profile.jsp").forward(request, response);
-            
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("error", "System error occurred. Please try again.");
-            request.getRequestDispatcher("profile.jsp").forward(request, response);
-        }
-    }
-
-    /**
-     * Validate email address format
-     */
-    private boolean isValidEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            return false;
+        } else {
+            request.setAttribute("error", result.getFirstError());
         }
         
-        String emailPattern = "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$";
-        return email.matches(emailPattern);
+        request.getRequestDispatcher("views/profile.jsp").forward(request, response);
     }
 
     /**
-     * Generate secure session attributes
+     * Get client IP address with proxy support
      */
-    private void setupSecureSession(HttpSession session, User user) {
-        session.setAttribute("user", user);
-        session.setAttribute("username", user.getUsername());
-        session.setAttribute("role", user.getRole());
-        session.setAttribute("userId", user.getUserId());
-        session.setAttribute("loginTime", System.currentTimeMillis());
-        session.setMaxInactiveInterval(1800); // 30 minutes
-    }
-
-    /**
-     * Validate session and user permissions
-     */
-    private boolean isValidManagerSession(HttpSession session) {
-        if (session == null) return false;
-        
-        User user = (User) session.getAttribute("user");
-        return user != null && "manager".equals(user.getRole()) && "active".equals(user.getStatus());
-    }
-
-    /**
-     * Clean sensitive data from request parameters for logging
-     */
-    private void logSecureActivity(int userId, String action, String details) {
-        try {
-            userDAO.logActivity(userId, action, details);
-        } catch (SQLException e) {
-            System.err.println("Failed to log user activity: " + e.getMessage());
+    private String getClientIP(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty() && !"unknown".equalsIgnoreCase(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
         }
+        
+        String xRealIP = request.getHeader("X-Real-IP");
+        if (xRealIP != null && !xRealIP.isEmpty() && !"unknown".equalsIgnoreCase(xRealIP)) {
+            return xRealIP;
+        }
+        
+        return request.getRemoteAddr();
     }
 }

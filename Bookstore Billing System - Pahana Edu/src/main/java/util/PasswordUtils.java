@@ -10,17 +10,17 @@ import java.util.regex.Pattern;
  * Utility class for password operations including hashing, verification, and strength checking
  */
 public class PasswordUtils {
-    
+
     private static final String SALT_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SALT_LENGTH = 16;
     private static final SecureRandom random = new SecureRandom();
-    
+
     // Password patterns
     private static final Pattern UPPERCASE = Pattern.compile("[A-Z]");
     private static final Pattern LOWERCASE = Pattern.compile("[a-z]");
     private static final Pattern NUMBERS = Pattern.compile("[0-9]");
     private static final Pattern SPECIAL_CHARS = Pattern.compile("[^A-Za-z0-9]");
-    
+
     /**
      * Hash a password with salt using SHA-256
      * @param password plain text password
@@ -30,7 +30,7 @@ public class PasswordUtils {
         String salt = generateSalt();
         return hashPasswordWithSalt(password, salt);
     }
-    
+
     /**
      * Hash password with provided salt
      * @param password plain text password
@@ -42,15 +42,15 @@ public class PasswordUtils {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             md.update(salt.getBytes());
             byte[] hashedPassword = md.digest(password.getBytes());
-            
+
             // Combine salt and hash
             String hash = Base64.getEncoder().encodeToString(hashedPassword);
-            return salt + ":" + hash;
+            return salt + ":" + hash;  // The salt and the hash are combined with ':' separator
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
     }
-    
+
     /**
      * Verify password against stored hash
      * @param password plain text password
@@ -61,18 +61,18 @@ public class PasswordUtils {
         if (storedHash == null || !storedHash.contains(":")) {
             return false;
         }
-        
+
         String[] parts = storedHash.split(":", 2);
         if (parts.length != 2) {
             return false;
         }
-        
+
         String salt = parts[0];
         String expectedHash = hashPasswordWithSalt(password, salt);
-        
+
         return expectedHash.equals(storedHash);
     }
-    
+
     /**
      * Generate random salt
      * @return random salt string
@@ -84,7 +84,7 @@ public class PasswordUtils {
         }
         return salt.toString();
     }
-    
+
     /**
      * Generate random reset token
      * @return secure random token
@@ -94,7 +94,7 @@ public class PasswordUtils {
         random.nextBytes(token);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(token);
     }
-    
+
     /**
      * Check password strength
      * @param password password to check
@@ -104,10 +104,10 @@ public class PasswordUtils {
         if (password == null || password.isEmpty()) {
             return new PasswordStrength(true, "Password cannot be empty");
         }
-        
+
         int score = 0;
         StringBuilder feedback = new StringBuilder();
-        
+
         // Length check
         if (password.length() >= 8) {
             score += 2;
@@ -117,65 +117,65 @@ public class PasswordUtils {
         } else {
             feedback.append("Password too short (minimum 6 characters). ");
         }
-        
+
         // Character variety checks
         if (UPPERCASE.matcher(password).find()) {
             score += 1;
         } else {
             feedback.append("Add uppercase letters. ");
         }
-        
+
         if (LOWERCASE.matcher(password).find()) {
             score += 1;
         } else {
             feedback.append("Add lowercase letters. ");
         }
-        
+
         if (NUMBERS.matcher(password).find()) {
             score += 1;
         } else {
             feedback.append("Add numbers. ");
         }
-        
+
         if (SPECIAL_CHARS.matcher(password).find()) {
             score += 1;
         } else {
             feedback.append("Add special characters. ");
         }
-        
+
         // Determine strength
         boolean isWeak = score < 4;
         String message = feedback.toString().trim();
-        
+
         if (score >= 6) {
             message = "Strong password";
         } else if (score >= 4) {
             message = "Medium strength password";
         }
-        
+
         return new PasswordStrength(isWeak, message);
     }
-    
+
     /**
      * Password strength result class
      */
     public static class PasswordStrength {
         private final boolean weak;
         private final String message;
-        
+
         public PasswordStrength(boolean weak, String message) {
             this.weak = weak;
             this.message = message;
         }
-        
+
         public boolean isWeak() {
             return weak;
         }
-        
+
         public String getMessage() {
             return message;
         }
-        
+
         public boolean isStrong() {
             return !weak;
         }
