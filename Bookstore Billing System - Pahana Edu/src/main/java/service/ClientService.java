@@ -1,469 +1,328 @@
 package service;
 
-
-
 import dao.ClientDAO;
 import model.ClientDTO;
+import model.TierDTO;
+import util.ConnectionManager;
+import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
-
 
 public class ClientService {
     
     private static final Logger LOGGER = Logger.getLogger(ClientService.class.getName());
-    
-    // ClientDAO instance
     private ClientDAO clientDAO;
-    
-    // Validation patterns
-    private static final Pattern EMAIL_PATTERN = 
-        Pattern.compile("^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$");
-    
-    private static final Pattern PHONE_PATTERN = 
-        Pattern.compile("^[\\+]?[1-9][\\d]{0,15}$");
-    
-    private static final Pattern ZIP_PATTERN = 
-        Pattern.compile("^\\d{4,10}$");
-    
-    /**
-     * Constructor
-     */
+    private TierService tierService;
+
     public ClientService() {
         this.clientDAO = new ClientDAO();
+        this.tierService = new TierService();
     }
-    
+
     /**
-     * Add a new client
-     */
-    public boolean addClient(ClientDTO client) {
-        // Validate client data
-        String validationError = validateClient(client, true);
-        if (validationError != null) {
-            LOGGER.warning("Client validation failed: " + validationError);
-            throw new IllegalArgumentException(validationError);
-        }
-        
-        try {
-            // Check for duplicate email
-            if (clientDAO.emailExists(client.getEmail(), null)) {
-                throw new IllegalArgumentException("Email already exists: " + client.getEmail());
-            }
-            
-            // Set default values
-            client.generateAccountNumber();
-            client.setLoyaltyPoints(0);
-            client.setTierLevel("BRONZE");
-            
-            boolean result = clientDAO.createClient(client);
-            
-            if (result) {
-                LOGGER.info("Client added successfully: " + client.getFullName());
-            } else {
-                LOGGER.warning("Failed to add client: " + client.getFullName());
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while adding client: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to add client due to database error", e);
-        }
-    }
-    
-    /**
-     * Get all clients
+     * Get all clients with tier information
      */
     public List<ClientDTO> getAllClients() {
         try {
             List<ClientDTO> clients = clientDAO.getAllClients();
-            LOGGER.info("Retrieved " + clients.size() + " clients");
+            LOGGER.info("ClientService: Retrieved " + clients.size() + " clients");
             return clients;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving clients: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve clients due to database error", e);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error getting all clients", e);
+            return new ArrayList<>();
         }
     }
-    
+
     /**
      * Get client by ID
      */
-    public ClientDTO getClientById(Long id) {
-        if (id == null || id <= 0) {
-            throw new IllegalArgumentException("Invalid client ID");
+    public ClientDTO getClientById(Long clientId) {
+        if (clientId == null) {
+            throw new IllegalArgumentException("Client ID cannot be null");
         }
-        
+
         try {
-            ClientDTO client = clientDAO.getClientById(id);
-            
+            ClientDTO client = clientDAO.getClientById(clientId);
             if (client != null) {
-                LOGGER.info("Client found: " + client.getFullName());
-            } else {
-                LOGGER.info("No client found with ID: " + id);
+                LOGGER.info("ClientService: Retrieved client - " + client.getFullName());
             }
-            
             return client;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving client: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve client due to database error", e);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error getting client by ID: " + clientId, e);
+            return null;
         }
     }
-    
+
+    /**
+     * Add new client with automatic tier assignment
+     */
+    public boolean addClient(ClientDTO client) {
+        if (client == null) {
+            throw new IllegalArgumentException("Client cannot be null");
+        }
+
+        try {
+            // Generate account number
+            client.setAccountNumber(generateAccountNumber());
+            
+            // Assign tier based on loyalty points (0 for new clients = Bronze)
+            assignTierToClient(client);
+
+            boolean success = clientDAO.addClient(client);
+            
+            if (success) {
+                LOGGER.info("ClientService: Client added successfully - " + client.getFullName() + 
+                           " (Tier: " + client.getTierLevel() + ")");
+            }
+            
+            return success;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error adding client", e);
+            return false;
+        }
+    }
+
     /**
      * Update client
      */
     public boolean updateClient(ClientDTO client) {
-        if (client.getId() == null || client.getId() <= 0) {
-            throw new IllegalArgumentException("Invalid client ID for update");
+        if (client == null || client.getId() == null) {
+            throw new IllegalArgumentException("Client and client ID cannot be null");
         }
-        
-        // Validate client data
-        String validationError = validateClient(client, false);
-        if (validationError != null) {
-            LOGGER.warning("Client validation failed: " + validationError);
-            throw new IllegalArgumentException(validationError);
-        }
-        
+
         try {
-            // Check for duplicate email (excluding current client)
-            if (clientDAO.emailExists(client.getEmail(), client.getId())) {
-                throw new IllegalArgumentException("Email already exists: " + client.getEmail());
+            // Keep existing loyalty points and recalculate tier
+            ClientDTO existing = clientDAO.getClientById(client.getId());
+            if (existing != null) {
+                client.setLoyaltyPoints(existing.getLoyaltyPoints());
+            }
+            assignTierToClient(client);
+
+            boolean success = clientDAO.updateClient(client);
+            
+            if (success) {
+                LOGGER.info("ClientService: Client updated successfully - " + client.getFullName() + 
+                           " (Tier: " + client.getTierLevel() + ")");
             }
             
-            boolean result = clientDAO.updateClient(client);
-            
-            if (result) {
-                LOGGER.info("Client updated successfully: " + client.getFullName());
-            } else {
-                LOGGER.warning("Failed to update client: " + client.getFullName());
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while updating client: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to update client due to database error", e);
+            return success;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error updating client", e);
+            return false;
         }
     }
-    
+
     /**
      * Delete client
      */
-    public boolean deleteClient(Long id) {
-        if (id == null || id <= 0) {
-            throw new IllegalArgumentException("Invalid client ID for deletion");
+    public boolean deleteClient(Long clientId) {
+        if (clientId == null) {
+            throw new IllegalArgumentException("Client ID cannot be null");
         }
-        
+
         try {
-            // Check if client exists before deleting
-            ClientDTO existingClient = clientDAO.getClientById(id);
-            if (existingClient == null) {
-                throw new IllegalArgumentException("Client not found with ID: " + id);
+            boolean success = clientDAO.deleteClient(clientId);
+            
+            if (success) {
+                LOGGER.info("ClientService: Client deleted successfully - ID: " + clientId);
             }
             
-            boolean result = clientDAO.deleteClient(id);
-            
-            if (result) {
-                LOGGER.info("Client deleted successfully with ID: " + id);
-            } else {
-                LOGGER.warning("Failed to delete client with ID: " + id);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while deleting client: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to delete client due to database error", e);
+            return success;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error deleting client", e);
+            return false;
         }
     }
-    
+
     /**
      * Search clients
      */
     public List<ClientDTO> searchClients(String searchType, String searchQuery) {
-        if (searchType == null || searchType.trim().isEmpty()) {
-            throw new IllegalArgumentException("Search type is required");
-        }
-        
         if (searchQuery == null || searchQuery.trim().isEmpty()) {
-            throw new IllegalArgumentException("Search query is required");
+            return getAllClients();
         }
-        
-        // Validate search type
-        String normalizedSearchType = searchType.toLowerCase().trim();
-        if (!isValidSearchType(normalizedSearchType)) {
-            throw new IllegalArgumentException("Invalid search type: " + searchType);
-        }
-        
+
         try {
-            List<ClientDTO> clients = clientDAO.searchClients(normalizedSearchType, searchQuery.trim());
-            LOGGER.info("Search returned " + clients.size() + " results for: " + searchQuery);
+            List<ClientDTO> clients = clientDAO.searchClients(searchType, searchQuery);
+            LOGGER.info("ClientService: Found " + clients.size() + " clients matching search criteria");
             return clients;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while searching clients: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to search clients due to database error", e);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error searching clients", e);
+            return new ArrayList<>();
         }
     }
-    
+
     /**
-     * Update loyalty points for a client
+     * Update loyalty points (called from billing)
      */
     public boolean updateLoyaltyPoints(Long clientId, int additionalPoints) {
-        if (clientId == null || clientId <= 0) {
-            throw new IllegalArgumentException("Invalid client ID");
+        if (clientId == null) {
+            throw new IllegalArgumentException("Client ID cannot be null");
         }
-        
-        if (additionalPoints < 0) {
-            throw new IllegalArgumentException("Additional points cannot be negative");
-        }
-        
+
         try {
-            // Get current client data
             ClientDTO client = clientDAO.getClientById(clientId);
             if (client == null) {
-                throw new IllegalArgumentException("Client not found with ID: " + clientId);
+                return false;
+            }
+
+            int newPoints = client.getLoyaltyPoints() + additionalPoints;
+            
+            // Find new tier for updated points
+            TierDTO newTier = tierService.getTierForPoints(newPoints);
+            
+            boolean success = clientDAO.updateClientLoyaltyPointsAndTier(
+                clientId, 
+                newPoints, 
+                newTier != null ? newTier.getId() : 1L
+            );
+            
+            if (success) {
+                LOGGER.info("ClientService: Updated loyalty points for client " + clientId + 
+                          ": " + newPoints + " points, Tier: " + 
+                          (newTier != null ? newTier.getTierName() : "Bronze"));
             }
             
-            // Calculate new points total
-            int newTotal = client.getLoyaltyPoints() + additionalPoints;
-            
-            boolean result = clientDAO.updateLoyaltyPoints(clientId, newTotal);
-            
-            if (result) {
-                LOGGER.info("Loyalty points updated for client ID: " + clientId + 
-                           " (+" + additionalPoints + " = " + newTotal + ")");
-            } else {
-                LOGGER.warning("Failed to update loyalty points for client ID: " + clientId);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while updating loyalty points: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to update loyalty points due to database error", e);
+            return success;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error updating loyalty points", e);
+            return false;
         }
     }
-    
+
     /**
-     * Get client profile data (for profile view)
+     * Get total clients count
+     */
+    public int getTotalClientsCount() {
+        try {
+            return clientDAO.getTotalClientsCount();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error getting client count", e);
+            return 0;
+        }
+    }
+
+    /**
+     * Generate account number
+     */
+    private String generateAccountNumber() {
+        try {
+            int year = java.time.Year.now().getValue();
+            int nextSequence = clientDAO.getNextAccountSequence();
+            return String.format("ACC-%d-%04d", year, nextSequence);
+        } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "ClientService: Error generating account number, using fallback", e);
+            return "ACC-" + System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Assign tier to client based on loyalty points
+     */
+    private void assignTierToClient(ClientDTO client) {
+        try {
+            int points = client.getLoyaltyPoints() != null ? client.getLoyaltyPoints() : 0;
+            TierDTO tier = tierService.getTierForPoints(points);
+            
+            if (tier != null) {
+                client.setTierId(tier.getId());
+                client.setTierLevel(tier.getTierName());
+            } else {
+                client.setTierId(1L); // Default to Bronze
+                client.setTierLevel("Bronze");
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "ClientService: Error assigning tier to client", e);
+            client.setTierId(1L);
+            client.setTierLevel("Bronze");
+        }
+    }
+
+    /**
+     * Get client profile HTML for AJAX
      */
     public String getClientProfileHtml(Long clientId) {
-        ClientDTO client = getClientById(clientId);
-        if (client == null) {
-            return "<p>Client not found</p>";
-        }
-        
-        StringBuilder html = new StringBuilder();
-        html.append("<div class='client-profile'>");
-        html.append("<div class='profile-header'>");
-        html.append("<h4>").append(client.getFullName()).append("</h4>");
-        html.append("<p class='account-number'>Account: ").append(client.getAccountNumber()).append("</p>");
-        html.append("</div>");
-        
-        html.append("<div class='profile-details'>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Email:</label> <span>").append(client.getEmail()).append("</span>");
-        html.append("</div>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Phone:</label> <span>").append(client.getPhone()).append("</span>");
-        html.append("</div>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Address:</label> <span>").append(client.getFullAddress()).append("</span>");
-        html.append("</div>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Loyalty Points:</label> <span class='loyalty-points'>").append(client.getLoyaltyPoints()).append("</span>");
-        html.append("</div>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Tier Level:</label> <span class='tier-badge tier-").append(client.getTierLevel().toLowerCase()).append("'>").append(client.getTierLevel()).append("</span>");
-        html.append("</div>");
-        html.append("<div class='detail-group'>");
-        html.append("<label>Auto Email:</label> <span class='auto-mail ").append(client.isSendMailAuto() ? "enabled" : "disabled").append("'>");
-        html.append("<i class='fas ").append(client.isSendMailAuto() ? "fa-check" : "fa-times").append("'></i> ");
-        html.append(client.isSendMailAuto() ? "Enabled" : "Disabled").append("</span>");
-        html.append("</div>");
-        html.append("</div>");
-        html.append("</div>");
-        
-        return html.toString();
-    }
-    
-    /**
-     * Validate client data
-     */
-    private String validateClient(ClientDTO client, boolean isNewClient) {
-        if (client == null) {
-            return "Client data is required";
-        }
-        
-        // First name validation
-        if (client.getFirstName() == null || client.getFirstName().trim().isEmpty()) {
-            return "First name is required";
-        }
-        if (client.getFirstName().trim().length() > 50) {
-            return "First name cannot exceed 50 characters";
-        }
-        
-        // Last name validation
-        if (client.getLastName() == null || client.getLastName().trim().isEmpty()) {
-            return "Last name is required";
-        }
-        if (client.getLastName().trim().length() > 50) {
-            return "Last name cannot exceed 50 characters";
-        }
-        
-        // Email validation
-        if (client.getEmail() == null || client.getEmail().trim().isEmpty()) {
-            return "Email is required";
-        }
-        if (!EMAIL_PATTERN.matcher(client.getEmail().trim()).matches()) {
-            return "Invalid email format";
-        }
-        if (client.getEmail().trim().length() > 100) {
-            return "Email cannot exceed 100 characters";
-        }
-        
-        // Phone validation
-        if (client.getPhone() == null || client.getPhone().trim().isEmpty()) {
-            return "Phone number is required";
-        }
-        String cleanPhone = client.getPhone().replaceAll("[\\s\\-\\(\\)]", "");
-        if (!PHONE_PATTERN.matcher(cleanPhone).matches()) {
-            return "Invalid phone number format";
-        }
-        
-        // Street validation
-        if (client.getStreet() == null || client.getStreet().trim().isEmpty()) {
-            return "Street address is required";
-        }
-        if (client.getStreet().trim().length() > 100) {
-            return "Street address cannot exceed 100 characters";
-        }
-        
-        // City validation
-        if (client.getCity() == null || client.getCity().trim().isEmpty()) {
-            return "City is required";
-        }
-        if (client.getCity().trim().length() > 50) {
-            return "City cannot exceed 50 characters";
-        }
-        
-        // State validation
-        if (client.getState() == null || client.getState().trim().isEmpty()) {
-            return "State is required";
-        }
-        if (client.getState().trim().length() > 50) {
-            return "State cannot exceed 50 characters";
-        }
-        
-        // ZIP validation
-        if (client.getZip() == null || client.getZip().trim().isEmpty()) {
-            return "ZIP code is required";
-        }
-        if (!ZIP_PATTERN.matcher(client.getZip().trim()).matches()) {
-            return "Invalid ZIP code format";
-        }
-        
-        return null; // No validation errors
-    }
-    
-    /**
-     * Check if search type is valid
-     */
-    private boolean isValidSearchType(String searchType) {
-        return "id".equals(searchType) || 
-               "name".equals(searchType) || 
-               "email".equals(searchType) || 
-               "phone".equals(searchType);
-    }
-    
-    /**
-     * Get available search types
-     */
-    public String[] getAvailableSearchTypes() {
-        return new String[]{"id", "name", "email", "phone"};
-    }
-    
-    /**
-     * Get client statistics
-     */
-    public ClientStatistics getClientStatistics() {
-        List<ClientDTO> allClients = getAllClients();
-        
-        int totalClients = allClients.size();
-        int bronzeClients = 0;
-        int silverClients = 0;
-        int goldClients = 0;
-        int platinumClients = 0;
-        int autoMailEnabled = 0;
-        
-        for (ClientDTO client : allClients) {
-            switch (client.getTierLevel().toUpperCase()) {
-                case "BRONZE":
-                    bronzeClients++;
-                    break;
-                case "SILVER":
-                    silverClients++;
-                    break;
-                case "GOLD":
-                    goldClients++;
-                    break;
-                case "PLATINUM":
-                    platinumClients++;
-                    break;
+        try {
+            ClientDTO client = getClientById(clientId);
+            if (client == null) {
+                return "<p class='error'>Client not found</p>";
             }
+
+            StringBuilder html = new StringBuilder();
+            html.append("<div class='client-profile'>");
+            html.append("<div class='profile-header'>");
+            html.append("<h4>").append(client.getFullName()).append("</h4>");
+            html.append("<span class='account-number'>Account: ").append(client.getAccountNumber()).append("</span>");
+            html.append("</div>");
             
-            if (client.isSendMailAuto()) {
-                autoMailEnabled++;
-            }
+            html.append("<div class='profile-details'>");
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Email:</span>");
+            html.append("<span class='value'>").append(client.getEmail()).append("</span>");
+            html.append("</div>");
+            
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Phone:</span>");
+            html.append("<span class='value'>").append(client.getPhone()).append("</span>");
+            html.append("</div>");
+            
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Address:</span>");
+            html.append("<span class='value'>").append(getFullAddress(client)).append("</span>");
+            html.append("</div>");
+            
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Loyalty Points:</span>");
+            html.append("<span class='value loyalty-points'>").append(client.getLoyaltyPoints()).append("</span>");
+            html.append("</div>");
+            
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Tier Level:</span>");
+            html.append("<span class='value tier-badge tier-").append(client.getTierLevel().toLowerCase()).append("'>");
+            html.append(client.getTierLevel());
+            html.append("</span>");
+            html.append("</div>");
+            
+            html.append("<div class='detail-row'>");
+            html.append("<span class='label'>Auto Mail:</span>");
+            html.append("<span class='value auto-mail ").append(client.isSendMailAuto() ? "enabled" : "disabled").append("'>");
+            html.append("<i class='fas ").append(client.isSendMailAuto() ? "fa-check" : "fa-times").append("'></i> ");
+            html.append(client.isSendMailAuto() ? "Enabled" : "Disabled");
+            html.append("</span>");
+            html.append("</div>");
+            
+            html.append("</div>");
+            html.append("</div>");
+
+            return html.toString();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error generating client profile HTML", e);
+            return "<p class='error'>Error loading client profile</p>";
         }
-        
-        return new ClientStatistics(totalClients, bronzeClients, silverClients, 
-                                  goldClients, platinumClients, autoMailEnabled);
     }
-    
+
     /**
-     * Inner class for client statistics
+     * Get full address string
      */
-    public static class ClientStatistics {
-        private int totalClients;
-        private int bronzeClients;
-        private int silverClients;
-        private int goldClients;
-        private int platinumClients;
-        private int autoMailEnabled;
-        
-        public ClientStatistics(int totalClients, int bronzeClients, int silverClients,
-                              int goldClients, int platinumClients, int autoMailEnabled) {
-            this.totalClients = totalClients;
-            this.bronzeClients = bronzeClients;
-            this.silverClients = silverClients;
-            this.goldClients = goldClients;
-            this.platinumClients = platinumClients;
-            this.autoMailEnabled = autoMailEnabled;
+    private String getFullAddress(ClientDTO client) {
+        StringBuilder address = new StringBuilder();
+        if (client.getStreet() != null && !client.getStreet().trim().isEmpty()) {
+            address.append(client.getStreet());
         }
-        
-        // Getters
-        public int getTotalClients() { return totalClients; }
-        public int getBronzeClients() { return bronzeClients; }
-        public int getSilverClients() { return silverClients; }
-        public int getGoldClients() { return goldClients; }
-        public int getPlatinumClients() { return platinumClients; }
-        public int getAutoMailEnabled() { return autoMailEnabled; }
+        if (client.getCity() != null && !client.getCity().trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(client.getCity());
+        }
+        if (client.getState() != null && !client.getState().trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(client.getState());
+        }
+        if (client.getZip() != null && !client.getZip().trim().isEmpty()) {
+            if (address.length() > 0) address.append(" ");
+            address.append(client.getZip());
+        }
+        return address.toString();
     }
 }

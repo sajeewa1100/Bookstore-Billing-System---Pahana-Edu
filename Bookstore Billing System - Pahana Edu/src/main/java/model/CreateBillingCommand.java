@@ -1,5 +1,5 @@
+// Fixed CreateBillingCommand
 package model;
-
 
 import service.BillingService;
 import service.ClientService;
@@ -9,14 +9,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-/**
- * Command to create new billing
- */
-class CreateBillingCommand implements BillingCommand {
+public class CreateBillingCommand implements BillingCommand {
     
+    private static final Logger LOGGER = Logger.getLogger(CreateBillingCommand.class.getName());
     private BillingService billingService;
     private ClientService clientService;
     private BookService bookService;
@@ -31,7 +30,7 @@ class CreateBillingCommand implements BillingCommand {
     public void execute(HttpServletRequest request, HttpServletResponse response) 
             throws ServletException, IOException {
         
-        System.out.println("CreateBillingCommand: Executing command to create billing");
+        LOGGER.info("CreateBillingCommand: Executing command to create billing");
         
         String method = request.getMethod();
         
@@ -49,20 +48,19 @@ class CreateBillingCommand implements BillingCommand {
         
         try {
             // Get all clients and books for the form
-            java.util.List<ClientDTO> clients = clientService.getAllClients();
-            java.util.List<BookDTO> books = bookService.getAllBooks();
+            List<ClientDTO> clients = clientService.getAllClients();
+            List<BookDTO> books = bookService.getAllBooks();
             
             request.setAttribute("clients", clients);
             request.setAttribute("books", books);
             
-            System.out.println("CreateBillingCommand: Showing billing form with " + 
-                             clients.size() + " clients and " + books.size() + " books");
+            LOGGER.info("CreateBillingCommand: Showing billing form with " + 
+                       clients.size() + " clients and " + books.size() + " books");
             
             request.getRequestDispatcher("views/create-billing.jsp").forward(request, response);
             
         } catch (Exception e) {
-            System.err.println("CreateBillingCommand: Error showing form - " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "CreateBillingCommand: Error showing form", e);
             request.setAttribute("errorMessage", "Error loading billing form: " + e.getMessage());
             response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
         }
@@ -75,16 +73,16 @@ class CreateBillingCommand implements BillingCommand {
             // Get form parameters
             String clientIdStr = request.getParameter("clientId");
             String paymentMethod = request.getParameter("paymentMethod");
-            String discountAmountStr = request.getParameter("discountAmount");
+            String discountPercentageStr = request.getParameter("discountPercentage");
             String notes = request.getParameter("notes");
             
-            // Get selected books and quantities
-            String[] bookIds = request.getParameterValues("bookId");
-            String[] quantities = request.getParameterValues("quantity");
+            // Get selected books and quantities - Fixed parameter names
+            String[] bookIds = request.getParameterValues("bookIds");
+            String[] quantities = request.getParameterValues("quantities");
             
-            System.out.println("CreateBillingCommand: Processing billing creation");
-            System.out.println("Client ID: " + clientIdStr);
-            System.out.println("Books selected: " + (bookIds != null ? bookIds.length : 0));
+            LOGGER.info("CreateBillingCommand: Processing billing creation");
+            LOGGER.info("Client ID: " + clientIdStr);
+            LOGGER.info("Books selected: " + (bookIds != null ? bookIds.length : 0));
             
             // Validation
             if (clientIdStr == null || clientIdStr.trim().isEmpty()) {
@@ -107,24 +105,18 @@ class CreateBillingCommand implements BillingCommand {
             billing.setPaymentMethod(paymentMethod);
             billing.setNotes(notes);
             
-            // Add discount if specified
-            if (discountAmountStr != null && !discountAmountStr.trim().isEmpty()) {
-                try {
-                    java.math.BigDecimal discountAmount = new java.math.BigDecimal(discountAmountStr);
-                    billing.applyDiscountAmount(discountAmount);
-                } catch (NumberFormatException e) {
-                    System.out.println("Invalid discount amount, ignoring: " + discountAmountStr);
-                }
-            }
-            
             // Add bill items
             for (int i = 0; i < bookIds.length; i++) {
-                if (quantities[i] == null || quantities[i].trim().isEmpty() || "0".equals(quantities[i])) {
-                    continue; // Skip items with zero or empty quantity
+                String bookIdStr = bookIds[i];
+                String quantityStr = quantities[i];
+                
+                if (bookIdStr == null || bookIdStr.trim().isEmpty() || 
+                    quantityStr == null || quantityStr.trim().isEmpty() || "0".equals(quantityStr)) {
+                    continue; // Skip items with zero or empty values
                 }
                 
-                int bookId = Integer.parseInt(bookIds[i]);
-                int quantity = Integer.parseInt(quantities[i]);
+                int bookId = Integer.parseInt(bookIdStr);
+                int quantity = Integer.parseInt(quantityStr);
                 
                 if (quantity <= 0) {
                     continue; // Skip invalid quantities
@@ -134,12 +126,22 @@ class CreateBillingCommand implements BillingCommand {
                 if (book != null) {
                     BillItemDTO item = new BillItemDTO(book, quantity);
                     billing.addItem(item);
-                    System.out.println("Added item: " + book.getTitle() + " x " + quantity);
+                    LOGGER.info("Added item: " + book.getTitle() + " x " + quantity);
                 }
             }
             
             if (billing.getItems().isEmpty()) {
                 throw new IllegalArgumentException("No valid items found for billing");
+            }
+            
+            // Apply discount percentage if specified
+            if (discountPercentageStr != null && !discountPercentageStr.trim().isEmpty()) {
+                try {
+                    BigDecimal discountPercentage = new BigDecimal(discountPercentageStr);
+                    billing.applyDiscountPercentage(discountPercentage);
+                } catch (NumberFormatException e) {
+                    LOGGER.warning("Invalid discount percentage, ignoring: " + discountPercentageStr);
+                }
             }
             
             // Create the bill
@@ -148,18 +150,16 @@ class CreateBillingCommand implements BillingCommand {
             if (success) {
                 request.getSession().setAttribute("successMessage", 
                     "Bill created successfully! Bill Number: " + billing.getBillNumber());
-                System.out.println("CreateBillingCommand: Bill created successfully - " + billing.getBillNumber());
+                LOGGER.info("CreateBillingCommand: Bill created successfully - " + billing.getBillNumber());
                 
-                // Redirect to view the created bill
-                response.sendRedirect(request.getContextPath() + 
-                    "/BillingServlet?action=view&id=" + billing.getId());
+                // Redirect to billing list
+                response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
             } else {
                 throw new RuntimeException("Failed to create bill");
             }
             
         } catch (Exception e) {
-            System.err.println("CreateBillingCommand: Error creating bill - " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "CreateBillingCommand: Error creating bill", e);
             
             request.getSession().setAttribute("errorMessage", 
                 "Error creating bill: " + e.getMessage());
@@ -169,4 +169,3 @@ class CreateBillingCommand implements BillingCommand {
         }
     }
 }
-

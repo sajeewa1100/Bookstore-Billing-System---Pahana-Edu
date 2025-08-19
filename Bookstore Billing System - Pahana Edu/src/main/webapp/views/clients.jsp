@@ -10,6 +10,58 @@
     <title>Clients - Pahana Bookstore</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=1.0" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        /* Additional styles for tier information */
+        .tier-info {
+            display: block;
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .tier-bronze { background-color: #cd7f32; color: white; }
+        .tier-silver { background-color: #c0c0c0; color: white; }
+        .tier-gold { background-color: #ffd700; color: black; }
+        .tier-platinum { background-color: #e5e4e2; color: black; }
+        
+        .search-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .search-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .search-input-group select,
+        .search-input-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .search-input-group input {
+            min-width: 200px;
+        }
+        
+        .search-help {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
 </head>
 <body>
 
@@ -40,23 +92,23 @@
     </c:if>
 
     <!-- Search Section -->
-    <div class="filter-section">
-        <form action="${pageContext.request.contextPath}/ClientServlet" method="get">
+    <div class="search-section">
+        <form action="${pageContext.request.contextPath}/ClientServlet" method="get" class="search-form">
             <input type="hidden" name="action" value="search" />
-            <div class="search-controls">
-                <div class="search-group">
-                    <label for="searchType">Search by:</label>
-                    <select name="searchType" id="searchType">
-                        <option value="id" <c:if test="${searchType eq 'id'}">selected</c:if>>Account ID</option>
-                        <option value="phone" <c:if test="${searchType eq 'phone'}">selected</c:if>>Phone Number</option>
-                        <option value="name" <c:if test="${searchType eq 'name'}">selected</c:if>>Name</option>
-                        <option value="email" <c:if test="${searchType eq 'email'}">selected</c:if>>Email</option>
-                    </select>
-                </div>
-                <div class="search-group">
-                    <input type="text" name="searchQuery" id="searchQuery" 
-                           value="${searchQuery}" placeholder="Enter search term..." />
-                </div>
+            
+            <div class="search-input-group">
+                <label for="searchType"><strong>Search by:</strong></label>
+                <select name="searchType" id="searchType">
+                    <option value="phone" <c:if test="${searchType eq 'phone'}">selected</c:if>>Phone Number</option>
+                    <option value="name" <c:if test="${searchType eq 'name'}">selected</c:if>>Name</option>
+                    <option value="email" <c:if test="${searchType eq 'email'}">selected</c:if>>Email</option>
+                    <option value="id" <c:if test="${searchType eq 'id'}">selected</c:if>>Account ID</option>
+                </select>
+            </div>
+            
+            <div class="search-input-group">
+                <input type="text" name="searchQuery" id="searchQuery" 
+                       value="${searchQuery}" placeholder="Enter search term..." />
                 <button type="submit" class="btn-filter">
                     <i class="fas fa-search"></i> Search
                 </button>
@@ -65,6 +117,10 @@
                 </a>
             </div>
         </form>
+        
+        <div class="search-help" id="searchHelp">
+            <!-- Dynamic help text will be shown here -->
+        </div>
     </div>
 
     <!-- Client List -->
@@ -176,7 +232,8 @@
 
                     <div class="form-group half-width">
                         <label for="phone">Phone Number: <span class="required">*</span></label>
-                        <input type="tel" id="phone" name="phone" required placeholder="Enter phone number" />
+                        <input type="tel" id="phone" name="phone" required placeholder="e.g., 0771234567 or +94771234567" />
+                        <small class="form-help">Sri Lankan phone format: 0771234567, +94771234567, or 771234567</small>
                     </div>
                 </div>
 
@@ -192,13 +249,13 @@
                     </div>
 
                     <div class="form-group third-width">
-                        <label for="state">State: <span class="required">*</span></label>
-                        <input type="text" id="state" name="state" required placeholder="Enter state" />
+                        <label for="state">State/Province: <span class="required">*</span></label>
+                        <input type="text" id="state" name="state" required placeholder="Enter state/province" />
                     </div>
 
                     <div class="form-group third-width">
-                        <label for="zip">Zip Code: <span class="required">*</span></label>
-                        <input type="text" id="zip" name="zip" required placeholder="Enter zip code" />
+                        <label for="zip">Postal Code: <span class="required">*</span></label>
+                        <input type="text" id="zip" name="zip" required placeholder="Enter postal code" />
                     </div>
                 </div>
 
@@ -240,6 +297,37 @@
 </main>
 
 <script>
+    // Update search help text based on selected search type
+    function updateSearchHelp() {
+        const searchType = document.getElementById('searchType').value;
+        const helpElement = document.getElementById('searchHelp');
+        
+        switch(searchType) {
+            case 'phone':
+                helpElement.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Phone Search:</strong> Enter any part of the phone number. Supports Sri Lankan formats: 0771234567, +94771234567, 771234567';
+                break;
+            case 'name':
+                helpElement.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Name Search:</strong> Search by first name, last name, or full name';
+                break;
+            case 'email':
+                helpElement.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Email Search:</strong> Enter any part of the email address';
+                break;
+            case 'id':
+                helpElement.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Account ID Search:</strong> Enter any part of the account number';
+                break;
+            default:
+                helpElement.innerHTML = '';
+        }
+    }
+
+    // Initialize search help on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateSearchHelp();
+        
+        // Update help when search type changes
+        document.getElementById('searchType').addEventListener('change', updateSearchHelp);
+    });
+
     // Modal functions
     function openAddModal() {
         document.getElementById('modalTitle').textContent = 'Add New Client';
@@ -311,7 +399,7 @@
         }
     }
 
-    // Form validation
+    // Form validation with Sri Lankan phone validation
     document.getElementById('clientForm').addEventListener('submit', function(e) {
         var email = document.getElementById('email').value;
         var phone = document.getElementById('phone').value;
@@ -325,23 +413,45 @@
             return false;
         }
         
-        // Phone validation (basic)
-        var phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-        if (!phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''))) {
-            alert('Please enter a valid phone number');
+        // Sri Lankan phone validation
+        if (!isValidSriLankanPhone(phone)) {
+            alert('Please enter a valid Sri Lankan phone number.\nAccepted formats:\n- 0771234567\n- +94771234567\n- 771234567');
             e.preventDefault();
             return false;
         }
         
         // Zip code validation (basic)
         if (zip.length < 4) {
-            alert('Please enter a valid zip code');
+            alert('Please enter a valid postal code');
             e.preventDefault();
             return false;
         }
         
         return true;
     });
+
+    // Sri Lankan phone validation function
+    function isValidSriLankanPhone(phone) {
+        if (!phone) return false;
+        
+        // Remove all non-digit characters except +
+        var cleanPhone = phone.replace(/[^\d+]/g, '');
+        
+        // Check different Sri Lankan phone patterns
+        if (cleanPhone.startsWith('+94')) {
+            // International format: +94771234567
+            var withoutCountry = cleanPhone.substring(3);
+            return withoutCountry.length === 9 && withoutCountry.startsWith('7');
+        } else if (cleanPhone.startsWith('0')) {
+            // Local format: 0771234567
+            return cleanPhone.length >= 9 && cleanPhone.length <= 10;
+        } else if (cleanPhone.length === 9 && cleanPhone.startsWith('7')) {
+            // Mobile without leading 0: 771234567
+            return true;
+        }
+        
+        return false;
+    }
 
     // Auto-hide success/error messages after 5 seconds
     document.addEventListener('DOMContentLoaded', function() {
@@ -375,12 +485,19 @@
         }
     });
 
-    // Phone number formatting
+    // Phone number formatting for Sri Lankan numbers
     document.getElementById('phone').addEventListener('input', function(e) {
-        var value = e.target.value.replace(/\D/g, '');
-        var formattedValue = value.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-        if (value.length <= 10) {
-            e.target.value = formattedValue;
+        var value = e.target.value.replace(/[^\d+]/g, '');
+        
+        // Auto-format Sri Lankan mobile numbers
+        if (value.startsWith('0') && value.length === 10) {
+            // Format as 077 123 4567
+            var formatted = value.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+            e.target.value = formatted;
+        } else if (value.startsWith('+94') && value.length === 12) {
+            // Format as +94 77 123 4567
+            var formatted = value.replace(/(\+94)(\d{2})(\d{3})(\d{4})/, '$1 $2 $3 $4');
+            e.target.value = formatted;
         }
     });
 
@@ -391,8 +508,38 @@
             this.closest('form').submit();
         }
     });
-</script>
 
+    // Update placeholder text based on search type
+    document.getElementById('searchType').addEventListener('change', function() {
+        var searchQuery = document.getElementById('searchQuery');
+        var searchType = this.value;
+        
+        switch(searchType) {
+            case 'phone':
+                searchQuery.placeholder = 'e.g., 0771234567, +94771234567, or 1234567';
+                break;
+            case 'name':
+                searchQuery.placeholder = 'Enter first name, last name, or full name';
+                break;
+            case 'email':
+                searchQuery.placeholder = 'Enter email address or part of it';
+                break;
+            case 'id':
+                searchQuery.placeholder = 'Enter account ID or part of it';
+                break;
+            default:
+                searchQuery.placeholder = 'Enter search term...';
+        }
+    });
+
+    // Initialize placeholder on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        var searchTypeSelect = document.getElementById('searchType');
+        if (searchTypeSelect) {
+            searchTypeSelect.dispatchEvent(new Event('change'));
+        }
+    });
+</script>
 
 </body>
 </html>

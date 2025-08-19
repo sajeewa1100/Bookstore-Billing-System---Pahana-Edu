@@ -20,11 +20,13 @@ public class ClientDTO implements Serializable {
     private String city;
     private String state;
     private String zip;
-    private int loyaltyPoints;
+    private Integer loyaltyPoints;
     private String tierLevel;
-    private boolean sendMailAuto;
+    private Boolean sendMailAuto;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Long tierId;
+    private TierDTO tier;
     
     // Default constructor
     public ClientDTO() {
@@ -47,7 +49,7 @@ public class ClientDTO implements Serializable {
     // Full constructor
     public ClientDTO(Long id, String accountNumber, String firstName, String lastName, 
                     String email, String phone, String street, String city, String state, 
-                    String zip, int loyaltyPoints, String tierLevel, boolean sendMailAuto) {
+                    String zip, Integer loyaltyPoints, String tierLevel, Boolean sendMailAuto) {
         this.id = id;
         this.accountNumber = accountNumber;
         this.firstName = firstName;
@@ -58,14 +60,29 @@ public class ClientDTO implements Serializable {
         this.city = city;
         this.state = state;
         this.zip = zip;
-        this.loyaltyPoints = loyaltyPoints;
-        this.tierLevel = tierLevel;
-        this.sendMailAuto = sendMailAuto;
+        this.loyaltyPoints = loyaltyPoints != null ? loyaltyPoints : 0;
+        this.tierLevel = tierLevel != null ? tierLevel : "BRONZE";
+        this.sendMailAuto = sendMailAuto != null ? sendMailAuto : false;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
     
+    // Constructor with tier information
+    public ClientDTO(Long id, String accountNumber, String firstName, String lastName, 
+                    String email, String phone, String street, String city, String state, 
+                    String zip, Integer loyaltyPoints, String tierLevel, Boolean sendMailAuto,
+                    Long tierId, TierDTO tier) {
+        this(id, accountNumber, firstName, lastName, email, phone, street, city, state,
+             zip, loyaltyPoints, tierLevel, sendMailAuto);
+        this.tierId = tierId;
+        this.tier = tier;
+        if (tier != null) {
+            this.tierLevel = tier.getTierName();
+        }
+    }
+    
     // Getters and Setters
+    
     public Long getId() {
         return id;
     }
@@ -146,29 +163,102 @@ public class ClientDTO implements Serializable {
         this.zip = zip;
     }
     
-    public int getLoyaltyPoints() {
-        return loyaltyPoints;
+    /**
+     * Get loyalty points with null safety
+     */
+    public Integer getLoyaltyPoints() {
+        return loyaltyPoints != null ? loyaltyPoints : 0;
     }
     
-    public void setLoyaltyPoints(int loyaltyPoints) {
-        this.loyaltyPoints = loyaltyPoints;
-        updateTierLevel();
+    /**
+     * Set loyalty points with null safety
+     */
+    public void setLoyaltyPoints(Integer loyaltyPoints) {
+        this.loyaltyPoints = loyaltyPoints != null ? loyaltyPoints : 0;
+        this.updatedAt = LocalDateTime.now();
     }
     
+    /**
+     * Helper method to get loyalty points as primitive int
+     */
+    public int getLoyaltyPointsAsInt() {
+        return loyaltyPoints != null ? loyaltyPoints : 0;
+    }
+    
+    /**
+     * Get tier level with null safety
+     */
     public String getTierLevel() {
-        return tierLevel;
+        return tierLevel != null ? tierLevel : "BRONZE";
     }
     
+    /**
+     * Set tier level
+     */
     public void setTierLevel(String tierLevel) {
-        this.tierLevel = tierLevel;
+        this.tierLevel = tierLevel != null ? tierLevel : "BRONZE";
+        this.updatedAt = LocalDateTime.now();
     }
     
+    /**
+     * Get tier ID
+     */
+    public Long getTierId() {
+        return tierId;
+    }
+    
+    /**
+     * Set tier ID
+     */
+    public void setTierId(Long tierId) {
+        this.tierId = tierId;
+    }
+    
+    /**
+     * Get tier object
+     */
+    public TierDTO getTier() {
+        return tier;
+    }
+    
+    /**
+     * Set tier object and update tier level
+     */
+    public void setTier(TierDTO tier) {
+        this.tier = tier;
+        if (tier != null) {
+            this.tierId = tier.getId();
+            this.tierLevel = tier.getTierName();
+        }
+    }
+    
+    /**
+     * Get send mail auto with null safety (Boolean getter)
+     */
+    public Boolean getSendMailAuto() {
+        return sendMailAuto != null ? sendMailAuto : false;
+    }
+    
+    /**
+     * Set send mail auto with null safety
+     */
+    public void setSendMailAuto(Boolean sendMailAuto) {
+        this.sendMailAuto = sendMailAuto != null ? sendMailAuto : false;
+        this.updatedAt = LocalDateTime.now();
+    }
+    
+    /**
+     * Check if auto mail is enabled (boolean getter for JSP compatibility)
+     */
     public boolean isSendMailAuto() {
-        return sendMailAuto;
+        return sendMailAuto != null && sendMailAuto;
     }
     
-    public void setSendMailAuto(boolean sendMailAuto) {
-        this.sendMailAuto = sendMailAuto;
+    /**
+     * Helper method to check if auto mail is enabled
+     */
+    public boolean isAutoMailEnabled() {
+        return sendMailAuto != null && sendMailAuto;
     }
     
     public LocalDateTime getCreatedAt() {
@@ -193,7 +283,8 @@ public class ClientDTO implements Serializable {
      * Get full name
      */
     public String getFullName() {
-        return (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "");
+        return (firstName != null ? firstName : "").trim() + " " + 
+               (lastName != null ? lastName : "").trim();
     }
     
     /**
@@ -201,16 +292,18 @@ public class ClientDTO implements Serializable {
      */
     public String getFullAddress() {
         StringBuilder address = new StringBuilder();
-        if (street != null) address.append(street);
-        if (city != null) {
+        if (street != null && !street.trim().isEmpty()) {
+            address.append(street);
+        }
+        if (city != null && !city.trim().isEmpty()) {
             if (address.length() > 0) address.append(", ");
             address.append(city);
         }
-        if (state != null) {
+        if (state != null && !state.trim().isEmpty()) {
             if (address.length() > 0) address.append(", ");
             address.append(state);
         }
-        if (zip != null) {
+        if (zip != null && !zip.trim().isEmpty()) {
             if (address.length() > 0) address.append(" ");
             address.append(zip);
         }
@@ -218,27 +311,29 @@ public class ClientDTO implements Serializable {
     }
     
     /**
-     * Update tier level based on loyalty points
+     * Add loyalty points
      */
-    private void updateTierLevel() {
-        if (loyaltyPoints >= 10000) {
-            this.tierLevel = "PLATINUM";
-        } else if (loyaltyPoints >= 5000) {
-            this.tierLevel = "GOLD";
-        } else if (loyaltyPoints >= 1000) {
-            this.tierLevel = "SILVER";
-        } else {
-            this.tierLevel = "BRONZE";
+    public void addLoyaltyPoints(int points) {
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0;
         }
+        this.loyaltyPoints += points;
+        this.updatedAt = LocalDateTime.now();
     }
     
     /**
-     * Add loyalty points and update tier
+     * Subtract loyalty points (for redemptions)
      */
-    public void addLoyaltyPoints(int points) {
-        this.loyaltyPoints += points;
-        updateTierLevel();
-        this.updatedAt = LocalDateTime.now();
+    public boolean subtractLoyaltyPoints(int points) {
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0;
+        }
+        if (this.loyaltyPoints >= points) {
+            this.loyaltyPoints -= points;
+            this.updatedAt = LocalDateTime.now();
+            return true;
+        }
+        return false;
     }
     
     /**
@@ -251,17 +346,141 @@ public class ClientDTO implements Serializable {
     }
     
     /**
-     * Validate client data
+     * Validate essential client data
      */
     public boolean isValid() {
         return firstName != null && !firstName.trim().isEmpty() &&
                lastName != null && !lastName.trim().isEmpty() &&
                email != null && !email.trim().isEmpty() &&
-               phone != null && !phone.trim().isEmpty() &&
+               isValidEmail() &&
+               phone != null && !phone.trim().isEmpty();
+    }
+    
+    /**
+     * Validate complete client data including address
+     */
+    public boolean isCompletelyValid() {
+        return isValid() &&
                street != null && !street.trim().isEmpty() &&
                city != null && !city.trim().isEmpty() &&
                state != null && !state.trim().isEmpty() &&
                zip != null && !zip.trim().isEmpty();
+    }
+    
+    /**
+     * Basic email validation
+     */
+    public boolean isValidEmail() {
+        if (email == null || email.trim().isEmpty()) {
+            return false;
+        }
+        return email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    }
+    
+    /**
+     * Validate Sri Lankan phone number
+     */
+    public boolean isValidSriLankanPhone() {
+        if (phone == null || phone.trim().isEmpty()) {
+            return false;
+        }
+        
+        String cleanPhone = phone.replaceAll("[^\\d+]", "");
+        
+        // Sri Lankan phone patterns
+        if (cleanPhone.startsWith("+94")) {
+            String withoutCountry = cleanPhone.substring(3);
+            return withoutCountry.length() == 9 && withoutCountry.startsWith("7");
+        } else if (cleanPhone.startsWith("0")) {
+            return cleanPhone.length() >= 9 && cleanPhone.length() <= 10;
+        } else if (cleanPhone.length() == 9 && cleanPhone.startsWith("7")) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Format phone number for display
+     */
+    public String getFormattedPhone() {
+        if (phone == null) return "";
+        
+        String cleanPhone = phone.replaceAll("[^\\d+]", "");
+        
+        if (cleanPhone.startsWith("+94") && cleanPhone.length() == 12) {
+            return cleanPhone.replaceAll("(\\+94)(\\d{2})(\\d{3})(\\d{4})", "$1 $2 $3 $4");
+        } else if (cleanPhone.startsWith("0") && cleanPhone.length() == 10) {
+            return cleanPhone.replaceAll("(\\d{3})(\\d{3})(\\d{4})", "$1 $2 $3");
+        }
+        
+        return phone; // Return original if no formatting rule matches
+    }
+    
+    /**
+     * Get initials from first and last name
+     */
+    public String getInitials() {
+        StringBuilder initials = new StringBuilder();
+        if (firstName != null && !firstName.trim().isEmpty()) {
+            initials.append(firstName.trim().charAt(0));
+        }
+        if (lastName != null && !lastName.trim().isEmpty()) {
+            initials.append(lastName.trim().charAt(0));
+        }
+        return initials.toString().toUpperCase();
+    }
+    
+    /**
+     * Check if client has sufficient loyalty points
+     */
+    public boolean hasSufficientPoints(int requiredPoints) {
+        return getLoyaltyPointsAsInt() >= requiredPoints;
+    }
+    
+    /**
+     * Get tier display name with fallback
+     */
+    public String getTierDisplayName() {
+        if (tier != null && tier.getTierName() != null) {
+            return tier.getTierName();
+        }
+        return getTierLevel();
+    }
+    
+    /**
+     * Check if client is in a specific tier
+     */
+    public boolean isInTier(String tierName) {
+        if (tierName == null) return false;
+        return tierName.equalsIgnoreCase(getTierLevel());
+    }
+    
+    /**
+     * Get discount percentage from tier
+     */
+    public double getDiscountPercentage() {
+        if (tier != null && tier.getDiscountPercentage() != null) {
+            return tier.getDiscountPercentage();
+        }
+        return 0.0;
+    }
+    
+    /**
+     * Check if address is complete
+     */
+    public boolean hasCompleteAddress() {
+        return street != null && !street.trim().isEmpty() &&
+               city != null && !city.trim().isEmpty() &&
+               state != null && !state.trim().isEmpty() &&
+               zip != null && !zip.trim().isEmpty();
+    }
+    
+    /**
+     * Update timestamp
+     */
+    public void touch() {
+        this.updatedAt = LocalDateTime.now();
     }
     
     @Override
@@ -278,6 +497,7 @@ public class ClientDTO implements Serializable {
                 ", loyaltyPoints=" + loyaltyPoints +
                 ", tierLevel='" + tierLevel + '\'' +
                 ", sendMailAuto=" + sendMailAuto +
+                ", tierId=" + tierId +
                 '}';
     }
     
