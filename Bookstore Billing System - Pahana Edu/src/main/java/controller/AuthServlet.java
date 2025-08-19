@@ -13,7 +13,6 @@ import java.sql.SQLException;
 import model.User;
 import dao.UserDAO;
 import service.AuthService;
-import util.PasswordUtils;
 import util.ValidationUtil;
 
 @WebServlet("/AuthServlet")

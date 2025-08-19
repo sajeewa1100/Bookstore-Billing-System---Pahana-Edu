@@ -8,40 +8,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tier Management - Pahana Bookstore</title>
+    <title>Dashboard - Pahana Bookstore</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=1.0" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    
     <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f4f7fa;
+        /* Additional styles for tier management */
+        .tier-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
         }
-        .container {
+        
+        .tier-bronze { border-left-color: #cd7f32; }
+        .tier-silver { border-left-color: #c0c0c0; }
+        .tier-gold { border-left-color: #ffd700; }
+        .tier-platinum { border-left-color: #e5e4e2; }
+        
+        .tier-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-top: 20px;
         }
-        .card {
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        
+        .tier-table th,
+        .tier-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
         }
-        .card-header {
-            background-color: #467fd0;
+        
+        .tier-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .tier-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .tier-badge.bronze { background-color: #cd7f32; }
+        .tier-badge.silver { background-color: #c0c0c0; color: #333; }
+        .tier-badge.gold { background-color: #ffd700; color: #333; }
+        .tier-badge.platinum { background-color: #e5e4e2; color: #333; }
+        
+        .btn-tier {
+            padding: 6px 12px;
+            margin: 2px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.9em;
+        }
+        
+        .btn-tier.edit {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-tier.delete {
+            background-color: #dc3545;
             color: white;
         }
-        .btn-primary, .btn-danger, .btn-success {
-            border-radius: 8px;
-            font-size: 16px;
+        
+        .btn-tier:hover {
+            opacity: 0.8;
         }
-        .table-hover tbody tr:hover {
-            background-color: #f1f1f1;
+        
+        .discount-rate {
+            font-weight: bold;
+            color: #28a745;
         }
-        .modal-header {
-            background-color: #467fd0;
-            color: white;
-        }
-        .modal-footer .btn {
-            border-radius: 5px;
+        
+        .points-range {
+            font-weight: 600;
+            color: #495057;
         }
     </style>
 </head>
@@ -50,210 +100,269 @@
 <%-- Include Sidebar --%>
 <jsp:include page="sidebar.jsp" flush="true" />
 
-<!-- Main Container -->
-<div class="container">
+<main class="main-content">
+    <div class="top-bar">
+        <h2 class="section-title">📊 Dashboard - Tier Management</h2>
+        <a href="javascript:void(0);" onclick="openAddTierModal();" class="btn-add-book">
+            <i class="fas fa-plus"></i> Add New Tier
+        </a>
+    </div>
 
-    <!-- Page Title -->
-    <h1 class="my-4">
-        <i class="fas fa-layer-group"></i> Tier Management
-    </h1>
+    <hr />
 
-    <!-- Success/Error Messages -->
+    <!-- Display Success/Error Messages -->
     <c:if test="${not empty sessionScope.successMessage}">
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <div class="success-message">
             <i class="fas fa-check-circle"></i> ${sessionScope.successMessage}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-        <c:remove var="successMessage" scope="session"/>
+        <c:remove var="successMessage" scope="session" />
     </c:if>
 
     <c:if test="${not empty sessionScope.errorMessage}">
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-triangle"></i> ${sessionScope.errorMessage}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="error-message">
+            <i class="fas fa-exclamation-circle"></i> ${sessionScope.errorMessage}
         </div>
-        <c:remove var="errorMessage" scope="session"/>
+        <c:remove var="errorMessage" scope="session" />
     </c:if>
 
-    <!-- Tier List -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Manage Tiers</h5>
-        </div>
-        <div class="card-body">
+    <!-- Debug Info -->
+    <div style="background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px;">
+        <strong>Debug Info:</strong><br>
+        Current User: ${currentUser != null ? currentUser.username : 'Not logged in'}<br>
+        Is Manager: ${isManager}<br>
+        Tiers Count: ${tiers != null ? fn:length(tiers) : 'No tiers data'}<br>
+        Action: ${param.action}
+    </div>
 
-            <!-- Tier Statistics -->
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <div class="card text-white bg-info">
-                        <div class="card-body">
-                            <h5 class="card-title">Total Tiers</h5>
-                            <h2>${fn:length(tiers)}</h2>
-                        </div>
+    <!-- Tier Overview Cards -->
+    <c:if test="${not empty tiers}">
+        <div style="display: flex; flex-wrap: wrap; margin: 20px 0;">
+            <c:forEach var="tier" items="${tiers}">
+                <div class="tier-card tier-${fn:toLowerCase(tier.tierName)}">
+                    <h4>
+                        <span class="tier-badge ${fn:toLowerCase(tier.tierName)}">${tier.tierName}</span>
+                    </h4>
+                    <div class="points-range">
+                        ${tier.minPoints} - ${tier.maxPoints != null ? tier.maxPoints : '∞'} points
+                    </div>
+                    <div class="discount-rate">
+                        <fmt:formatNumber value="${tier.discountRate * 100}" type="number" maxFractionDigits="1"/>% discount
                     </div>
                 </div>
-            </div>
+            </c:forEach>
+        </div>
+    </c:if>
 
-            <!-- Tier Table -->
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover">
+    <!-- Tier List Table -->
+    <div class="book-list">
+        <h3>All Tiers</h3>
+        <c:choose>
+            <c:when test="${not empty tiers}">
+                <table class="tier-table">
                     <thead>
-                    <tr>
-                        <th>Tier Name</th>
-                        <th>Points Range</th>
-                        <th>Discount Rate</th>
-                        <th>Created On</th>
-                        <th>Actions</th>
-                    </tr>
+                        <tr>
+                            <th>Tier Name</th>
+                            <th>Points Range</th>
+                            <th>Discount Rate</th>
+                            <th>Created Date</th>
+                            <th>Actions</th>
+                        </tr>
                     </thead>
                     <tbody>
-                    <c:forEach var="tier" items="${tiers}">
-                        <tr>
-                            <td>${tier.tierName}</td>
-                            <td>${tier.minPoints} - ${tier.maxPoints}</td>
-                            <td>${tier.discountRate}%</td>
-                            <td><fmt:formatDate value="${tier.createdAt}" pattern="MMM dd, yyyy" /></td>
-                            <td>
-                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#editTierModal" onclick="editTier('${tier.id}', '${tier.tierName}', ${tier.minPoints}, ${tier.maxPoints}, ${tier.discountRate})">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#deleteTierModal" onclick="deleteTier('${tier.id}', '${tier.tierName}')">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </td>
-                        </tr>
-                    </c:forEach>
+                        <c:forEach var="tier" items="${tiers}">
+                            <tr>
+                                <td>
+                                    <span class="tier-badge ${fn:toLowerCase(tier.tierName)}">${tier.tierName}</span>
+                                </td>
+                                <td class="points-range">
+                                    ${tier.minPoints} - ${tier.maxPoints != null ? tier.maxPoints : '∞'}
+                                </td>
+                                <td class="discount-rate">
+                                    <fmt:formatNumber value="${tier.discountRate * 100}" type="number" maxFractionDigits="1"/>%
+                                </td>
+                                <td>
+                                    <c:choose>
+                                        <c:when test="${tier.createdAt != null}">
+                                            <fmt:formatDate value="${tier.createdAtAsDate}" pattern="MMM dd, yyyy" />
+                                        </c:when>
+                                        <c:otherwise>Recently created</c:otherwise>
+                                    </c:choose>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn-tier edit" 
+                                            onclick="editTier('${tier.id}', '${fn:escapeXml(tier.tierName)}', ${tier.minPoints}, ${tier.maxPoints != null ? tier.maxPoints : 'null'}, ${tier.discountRate * 100})">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <form action="${pageContext.request.contextPath}/DashboardServlet" method="post" style="display: inline;" onsubmit="return confirmDeleteTier('${tier.tierName}');">
+                                        <input type="hidden" name="action" value="deletetier" />
+                                        <input type="hidden" name="id" value="${tier.id}" />
+                                        <button type="submit" class="btn-tier delete">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        </c:forEach>
                     </tbody>
                 </table>
-            </div>
-
-            <!-- Add New Tier Button -->
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addTierModal">
-                <i class="fas fa-plus"></i> Add New Tier
-            </button>
-        </div>
+            </c:when>
+            <c:otherwise>
+                <div class="no-books">
+                    <i class="fas fa-layer-group" style="font-size: 48px; margin-bottom: 20px; color: #ccc;"></i>
+                    <h3>No tiers available</h3>
+                    <p>Click "Add New Tier" to create your first tier for the loyalty program.</p>
+                </div>
+            </c:otherwise>
+        </c:choose>
     </div>
 
-    <!-- Add Tier Modal -->
-    <div class="modal fade" id="addTierModal" tabindex="-1" aria-labelledby="addTierModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addTierModalLabel">Add New Tier</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form action="${pageContext.request.contextPath}/DashboardServlet" method="post">
-                    <input type="hidden" name="action" value="createtier">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="tierName" class="form-label">Tier Name</label>
-                            <input type="text" class="form-control" id="tierName" name="tierName" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="minPoints" class="form-label">Minimum Points</label>
-                            <input type="number" class="form-control" id="minPoints" name="minPoints" min="0" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="maxPoints" class="form-label">Maximum Points</label>
-                            <input type="number" class="form-control" id="maxPoints" name="maxPoints" min="1" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="discountRate" class="form-label">Discount Rate (%)</label>
-                            <input type="number" class="form-control" id="discountRate" name="discountRate" min="0" max="100" step="0.1" required>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Tier</button>
-                    </div>
-                </form>
+    <!-- Add/Edit Tier Modal -->
+    <div id="tierModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="tierModalTitle">Add New Tier</h3>
+                <span class="close" onclick="closeTierModal()">&times;</span>
             </div>
+            <hr />
+            
+            <form action="${pageContext.request.contextPath}/DashboardServlet" method="post" id="tierForm">
+                <input type="hidden" name="action" value="createtier" id="tierFormAction" />
+                <input type="hidden" name="id" id="tierId" />
+
+                <div class="form-group">
+                    <label for="tierName">Tier Name:</label>
+                    <input type="text" id="tierName" name="tierName" required placeholder="e.g., Bronze, Silver, Gold" maxlength="50" />
+                </div>
+
+                <div class="form-group">
+                    <label for="minPoints">Minimum Points:</label>
+                    <input type="number" id="minPoints" name="minPoints" required placeholder="0" min="0" max="999999" />
+                </div>
+
+                <div class="form-group">
+                    <label for="maxPoints">Maximum Points (optional):</label>
+                    <input type="number" id="maxPoints" name="maxPoints" placeholder="Leave empty for unlimited" min="1" max="999999" />
+                </div>
+
+                <div class="form-group">
+                    <label for="discountRate">Discount Rate (%):</label>
+                    <input type="number" id="discountRate" name="discountRate" required placeholder="5.0" min="0" max="100" step="0.1" />
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-save" id="tierSaveBtn">
+                        <i class="fas fa-save"></i> Save Tier
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</main>
 
-    <!-- Edit Tier Modal -->
-    <div class="modal fade" id="editTierModal" tabindex="-1" aria-labelledby="editTierModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editTierModalLabel">Edit Tier</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form action="${pageContext.request.contextPath}/DashboardServlet" method="post">
-                    <input type="hidden" name="action" value="updatetier">
-                    <input type="hidden" id="editTierId" name="id">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="editTierName" class="form-label">Tier Name</label>
-                            <input type="text" class="form-control" id="editTierName" name="tierName" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="editMinPoints" class="form-label">Minimum Points</label>
-                            <input type="number" class="form-control" id="editMinPoints" name="minPoints" min="0" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="editMaxPoints" class="form-label">Maximum Points</label>
-                            <input type="number" class="form-control" id="editMaxPoints" name="maxPoints" min="1" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="editDiscountRate" class="form-label">Discount Rate (%)</label>
-                            <input type="number" class="form-control" id="editDiscountRate" name="discountRate" min="0" max="100" step="0.1" required>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Tier</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Tier Modal -->
-    <div class="modal fade" id="deleteTierModal" tabindex="-1" aria-labelledby="deleteTierModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title" id="deleteTierModalLabel">Confirm Deletion</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to delete the tier "<span id="deleteTierName"></span>"?</p>
-                    <p class="text-danger"><small>This action cannot be undone.</small></p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form action="${pageContext.request.contextPath}/DashboardServlet" method="post" style="display: inline;">
-                        <input type="hidden" name="action" value="deletetier">
-                        <input type="hidden" id="deleteTierId" name="id">
-                        <button type="submit" class="btn btn-danger">Delete Tier</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<!-- Scripts -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
-    function editTier(id, name, minPoints, maxPoints, discountRate) {
-        document.getElementById('editTierId').value = id;
-        document.getElementById('editTierName').value = name;
-        document.getElementById('editMinPoints').value = minPoints;
-        document.getElementById('editMaxPoints').value = maxPoints;
-        document.getElementById('editDiscountRate').value = discountRate;
-        new bootstrap.Modal(document.getElementById('editTierModal')).show();
+    // Tier Modal functions
+    function openAddTierModal() {
+        document.getElementById('tierModalTitle').textContent = 'Add New Tier';
+        document.getElementById('tierFormAction').value = 'createtier';
+        document.getElementById('tierId').value = '';
+        document.getElementById('tierSaveBtn').innerHTML = '<i class="fas fa-save"></i> Save Tier';
+        
+        // Clear form
+        document.getElementById('tierForm').reset();
+        
+        document.getElementById('tierModal').style.display = 'block';
     }
 
-    function deleteTier(id, name) {
-        document.getElementById('deleteTierId').value = id;
-        document.getElementById('deleteTierName').textContent = name;
-        new bootstrap.Modal(document.getElementById('deleteTierModal')).show();
+    function editTier(id, tierName, minPoints, maxPoints, discountRate) {
+        console.log('Edit tier:', {id, tierName, minPoints, maxPoints, discountRate});
+        
+        document.getElementById('tierModalTitle').textContent = 'Edit Tier';
+        document.getElementById('tierFormAction').value = 'updatetier';
+        document.getElementById('tierId').value = id;
+        document.getElementById('tierSaveBtn').innerHTML = '<i class="fas fa-save"></i> Update Tier';
+        
+        // Fill form with tier data
+        document.getElementById('tierName').value = tierName;
+        document.getElementById('minPoints').value = minPoints;
+        document.getElementById('maxPoints').value = (maxPoints !== null && maxPoints !== 'null') ? maxPoints : '';
+        document.getElementById('discountRate').value = discountRate;
+        
+        document.getElementById('tierModal').style.display = 'block';
     }
+
+    function closeTierModal() {
+        document.getElementById('tierModal').style.display = 'none';
+    }
+
+    function confirmDeleteTier(tierName) {
+        return confirm('Are you sure you want to delete the "' + tierName + '" tier? This action cannot be undone.');
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        var modal = document.getElementById('tierModal');
+        if (event.target == modal) {
+            closeTierModal();
+        }
+    }
+
+    // Form validation
+    document.getElementById('tierForm').addEventListener('submit', function(e) {
+        var minPoints = parseInt(document.getElementById('minPoints').value);
+        var maxPoints = document.getElementById('maxPoints').value;
+        var discountRate = parseFloat(document.getElementById('discountRate').value);
+        
+        if (minPoints < 0) {
+            alert('Minimum points cannot be negative');
+            e.preventDefault();
+            return false;
+        }
+        
+        if (maxPoints && parseInt(maxPoints) <= minPoints) {
+            alert('Maximum points must be greater than minimum points');
+            e.preventDefault();
+            return false;
+        }
+        
+        if (discountRate < 0 || discountRate > 100) {
+            alert('Discount rate must be between 0 and 100');
+            e.preventDefault();
+            return false;
+        }
+        
+        return true;
+    });
+
+    // Auto-hide success/error messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            var successMsg = document.querySelector('.success-message');
+            var errorMsg = document.querySelector('.error-message');
+            
+            if (successMsg) {
+                successMsg.style.transition = 'opacity 0.3s';
+                successMsg.style.opacity = '0';
+                setTimeout(function() { 
+                    successMsg.style.display = 'none'; 
+                }, 300);
+            }
+            
+            if (errorMsg) {
+                errorMsg.style.transition = 'opacity 0.3s';
+                errorMsg.style.opacity = '0';
+                setTimeout(function() { 
+                    errorMsg.style.display = 'none'; 
+                }, 300);
+            }
+        }, 5000);
+    });
+
+    // Escape key to close modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeTierModal();
+        }
+    });
 </script>
 
 </body>

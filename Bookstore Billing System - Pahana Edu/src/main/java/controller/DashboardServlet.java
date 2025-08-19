@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -19,13 +20,14 @@ import service.ClientService;
 import service.DashboardService;
 
 /**
- * Dashboard Servlet - Handles dashboard operations and data loading
+ * Dashboard Servlet - Handles tier management operations
+ * Following the same pattern as BookServlet for consistency
  */
 @WebServlet("/DashboardServlet")
 public class DashboardServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = Logger.getLogger(DashboardServlet.class.getName());
-    
+
     private TierService tierService;
     private ClientService clientService;
     private DashboardService dashboardService;
@@ -47,30 +49,29 @@ public class DashboardServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         String action = getActionFromRequest(request);
         LOGGER.info("DashboardServlet: Processing GET request with action: " + action);
-        
+
         // Check if user is authenticated
         if (!isUserAuthenticated(request, response)) {
             return;
         }
 
         try {
+            // Set user information for all requests
+            User user = (User) request.getSession().getAttribute("user");
+            request.setAttribute("currentUser", user);
+            request.setAttribute("isManager", "manager".equals(user.getRole()));
+
+            // Handle different actions - simplified like BookServlet
             switch (action.toLowerCase()) {
                 case "dashboard":
-                case "home":
-                    handleDashboard(request, response);
-                    break;
-                case "statistics":
-                    handleStatistics(request, response);
-                    break;
-                case "tiermanagement":
                 case "tiers":
-                    handleTierManagement(request, response);
-                    break;
+                case "tiermanagement":
+                case "":
                 default:
-                    handleDashboard(request, response);
+                    handleTierManagement(request, response);
                     break;
             }
         } catch (Exception e) {
@@ -82,10 +83,10 @@ public class DashboardServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         String action = getActionFromRequest(request);
         LOGGER.info("DashboardServlet: Processing POST request with action: " + action);
-        
+
         // Check if user is authenticated
         if (!isUserAuthenticated(request, response)) {
             return;
@@ -93,470 +94,381 @@ public class DashboardServlet extends HttpServlet {
 
         try {
             switch (action.toLowerCase()) {
-                case "refresh":
-                case "dashboard":
-                    handleDashboard(request, response);
-                    break;
                 case "createtier":
+                case "add":
                     handleCreateTier(request, response);
                     break;
                 case "updatetier":
+                case "update":
                     handleUpdateTier(request, response);
                     break;
                 case "deletetier":
+                case "delete":
                     handleDeleteTier(request, response);
                     break;
                 default:
-                    response.sendRedirect(request.getContextPath() + "/DashboardServlet?action=dashboard");
+                    response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                     break;
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "DashboardServlet: Error processing POST request: " + e.getMessage(), e);
-            handleError(request, response, "Error processing dashboard request: " + e.getMessage());
+            setErrorMessage(request, "Error processing request: " + e.getMessage());
+            response.sendRedirect(request.getContextPath() + "/DashboardServlet");
         }
     }
 
     /**
-     * Handle tier management page
+     * Handle tier management page - FIXED to match BookServlet pattern
      */
     private void handleTierManagement(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         try {
             User user = (User) request.getSession().getAttribute("user");
-            
+
             if (user == null) {
-                handleError(request, response, "User is not logged in.");
+                response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=Please login to access this page");
                 return;
             }
 
             // Set user attributes
             request.setAttribute("currentUser", user);
             request.setAttribute("isManager", "manager".equals(user.getRole()));
+
+            // Load tiers data - FIXED: Handle null case properly like BookServlet
+            List<TierDTO> tiers = null;
+            try {
+                tiers = tierService.getAllTiers();
+                LOGGER.info("DashboardServlet: Loaded " + (tiers != null ? tiers.size() : 0) + " tiers");
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error loading tiers: " + e.getMessage(), e);
+                tiers = new ArrayList<>();
+                setErrorMessage(request, "Error loading tiers: " + e.getMessage());
+            }
             
-            // Load tiers data
-            List<TierDTO> tiers = tierService.getAllTiers();
+            if (tiers == null) {
+                tiers = new ArrayList<>();
+            }
+            
             request.setAttribute("tiers", tiers);
-            
-            // Forward to tier management JSP (your current JSP)
-            request.getRequestDispatcher("/views/tier-management.jsp").forward(request, response);
-            
+            request.setAttribute("pageTitle", "Tier Management");
+
+            // Forward to dashboard JSP (same pattern as books.jsp)
+            request.getRequestDispatcher("/views/dashboard.jsp").forward(request, response);
+
             LOGGER.info("DashboardServlet: Successfully loaded tier management for user: " + user.getUsername());
-            
+
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "DashboardServlet: Error loading tier management: " + e.getMessage(), e);
-            handleError(request, response, "Error loading tier management: " + e.getMessage());
+            
+            // Set empty tiers and continue like BookServlet does
+            request.setAttribute("tiers", new ArrayList<>());
+            request.setAttribute("pageTitle", "Tier Management");
+            setErrorMessage(request, "Error loading tiers: " + e.getMessage());
+            
+            try {
+                request.getRequestDispatcher("/views/dashboard.jsp").forward(request, response);
+            } catch (Exception ex) {
+                response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=System error");
+            }
         }
     }
 
     /**
-     * Handle creating a new tier
+     * Handle creating a new tier - FIXED following BookServlet pattern
      */
     private void handleCreateTier(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         try {
             String tierName = request.getParameter("tierName");
             String minPointsStr = request.getParameter("minPoints");
             String maxPointsStr = request.getParameter("maxPoints");
             String discountRateStr = request.getParameter("discountRate");
-            
-            // Validate input
-            if (tierName == null || tierName.trim().isEmpty() ||
-                minPointsStr == null || maxPointsStr == null || discountRateStr == null) {
-                setErrorMessage(request, "All fields are required");
-                handleTierManagement(request, response);
+
+            // Validate input like BookServlet does
+            if (tierName == null || tierName.trim().isEmpty()) {
+                setErrorMessage(request, "Tier name is required");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                 return;
             }
+
+            if (minPointsStr == null || minPointsStr.trim().isEmpty()) {
+                setErrorMessage(request, "Minimum points is required");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
+            if (discountRateStr == null || discountRateStr.trim().isEmpty()) {
+                setErrorMessage(request, "Discount rate is required");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
+            // Parse and validate numbers
+            int minPoints;
+            Integer maxPoints = null;
+            double discountRate;
             
-            int minPoints = Integer.parseInt(minPointsStr);
-            int maxPoints = Integer.parseInt(maxPointsStr);
-            double discountRate = Double.parseDouble(discountRateStr);
-            
+            try {
+                minPoints = Integer.parseInt(minPointsStr.trim());
+                if (maxPointsStr != null && !maxPointsStr.trim().isEmpty()) {
+                    maxPoints = Integer.parseInt(maxPointsStr.trim());
+                }
+                discountRate = Double.parseDouble(discountRateStr.trim());
+            } catch (NumberFormatException e) {
+                setErrorMessage(request, "Invalid number format");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
             // Validate business rules
-            if (minPoints >= maxPoints) {
-                setErrorMessage(request, "Maximum points must be greater than minimum points");
-                handleTierManagement(request, response);
+            if (minPoints < 0) {
+                setErrorMessage(request, "Minimum points cannot be negative");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                 return;
             }
             
+            if (maxPoints != null && maxPoints <= minPoints) {
+                setErrorMessage(request, "Maximum points must be greater than minimum points");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+            
+            if (discountRate < 0 || discountRate > 100) {
+                setErrorMessage(request, "Discount rate must be between 0 and 100");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
             // Create tier using service
             TierDTO newTier = new TierDTO();
             newTier.setTierName(tierName.trim());
             newTier.setMinPoints(minPoints);
             newTier.setMaxPoints(maxPoints);
-            newTier.setDiscountRate(java.math.BigDecimal.valueOf(discountRate));
             
+            // CRITICAL FIX: Convert percentage to decimal
+            newTier.setDiscountRate(java.math.BigDecimal.valueOf(discountRate / 100.0));
+
             boolean success = tierService.createTier(newTier);
-            
+
             if (success) {
-                setSuccessMessage(request, "Tier created successfully");
+                setSuccessMessage(request, "Tier '" + tierName + "' created successfully!");
             } else {
-                setErrorMessage(request, "Failed to create tier");
+                setErrorMessage(request, "Failed to create tier. Please try again.");
             }
-            
-        } catch (NumberFormatException e) {
-            setErrorMessage(request, "Invalid number format in input");
+
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error creating tier: " + e.getMessage(), e);
             setErrorMessage(request, "Error creating tier: " + e.getMessage());
         }
-        
-        // Redirect back to tier management
-        response.sendRedirect(request.getContextPath() + "/DashboardServlet?action=tiermanagement");
+
+        // Redirect back like BookServlet does
+        response.sendRedirect(request.getContextPath() + "/DashboardServlet");
     }
 
     /**
-     * Handle updating an existing tier
+     * Handle updating an existing tier - FIXED following BookServlet pattern
      */
     private void handleUpdateTier(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         try {
             String idStr = request.getParameter("id");
             String tierName = request.getParameter("tierName");
             String minPointsStr = request.getParameter("minPoints");
             String maxPointsStr = request.getParameter("maxPoints");
             String discountRateStr = request.getParameter("discountRate");
-            
+
             // Validate input
-            if (idStr == null || tierName == null || tierName.trim().isEmpty() ||
-                minPointsStr == null || maxPointsStr == null || discountRateStr == null) {
-                setErrorMessage(request, "All fields are required");
-                handleTierManagement(request, response);
+            if (idStr == null || idStr.trim().isEmpty()) {
+                setErrorMessage(request, "Tier ID is required");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                 return;
             }
+
+            if (tierName == null || tierName.trim().isEmpty()) {
+                setErrorMessage(request, "Tier name is required");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
+            // Parse numbers
+            long id;
+            int minPoints;
+            Integer maxPoints = null;
+            double discountRate;
             
-            int id = Integer.parseInt(idStr);
-            int minPoints = Integer.parseInt(minPointsStr);
-            int maxPoints = Integer.parseInt(maxPointsStr);
-            double discountRate = Double.parseDouble(discountRateStr);
-            
+            try {
+                id = Long.parseLong(idStr.trim());
+                minPoints = Integer.parseInt(minPointsStr.trim());
+                if (maxPointsStr != null && !maxPointsStr.trim().isEmpty()) {
+                    maxPoints = Integer.parseInt(maxPointsStr.trim());
+                }
+                discountRate = Double.parseDouble(discountRateStr.trim());
+            } catch (NumberFormatException e) {
+                setErrorMessage(request, "Invalid number format");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
             // Validate business rules
-            if (minPoints >= maxPoints) {
-                setErrorMessage(request, "Maximum points must be greater than minimum points");
-                handleTierManagement(request, response);
+            if (minPoints < 0) {
+                setErrorMessage(request, "Minimum points cannot be negative");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                 return;
             }
             
-            // Update tier using service
+            if (maxPoints != null && maxPoints <= minPoints) {
+                setErrorMessage(request, "Maximum points must be greater than minimum points");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+            
+            if (discountRate < 0 || discountRate > 100) {
+                setErrorMessage(request, "Discount rate must be between 0 and 100");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
+            }
+
+            // Update tier
             TierDTO tierToUpdate = new TierDTO();
-            tierToUpdate.setId((long) id);
+            tierToUpdate.setId(id);
             tierToUpdate.setTierName(tierName.trim());
             tierToUpdate.setMinPoints(minPoints);
             tierToUpdate.setMaxPoints(maxPoints);
-            tierToUpdate.setDiscountRate(java.math.BigDecimal.valueOf(discountRate));
-            
+            tierToUpdate.setDiscountRate(java.math.BigDecimal.valueOf(discountRate / 100.0));
+
             boolean success = tierService.updateTier(tierToUpdate);
-            
+
             if (success) {
-                setSuccessMessage(request, "Tier updated successfully");
+                setSuccessMessage(request, "Tier '" + tierName + "' updated successfully!");
             } else {
-                setErrorMessage(request, "Failed to update tier");
+                setErrorMessage(request, "Failed to update tier. Please try again.");
             }
-            
-        } catch (NumberFormatException e) {
-            setErrorMessage(request, "Invalid number format in input");
+
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error updating tier: " + e.getMessage(), e);
             setErrorMessage(request, "Error updating tier: " + e.getMessage());
         }
-        
-        // Redirect back to tier management
-        response.sendRedirect(request.getContextPath() + "/DashboardServlet?action=tiermanagement");
+
+        response.sendRedirect(request.getContextPath() + "/DashboardServlet");
     }
 
     /**
-     * Handle deleting a tier
+     * Handle deleting a tier - FIXED following BookServlet pattern
      */
     private void handleDeleteTier(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
         try {
             String idStr = request.getParameter("id");
-            
-            if (idStr == null) {
+
+            if (idStr == null || idStr.trim().isEmpty()) {
                 setErrorMessage(request, "Tier ID is required");
-                handleTierManagement(request, response);
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
                 return;
             }
-            
-            long id = Long.parseLong(idStr);
-            
-            boolean success = tierService.deleteTier(id);
-            
-            if (success) {
-                setSuccessMessage(request, "Tier deleted successfully");
-            } else {
-                setErrorMessage(request, "Failed to delete tier");
+
+            long id;
+            try {
+                id = Long.parseLong(idStr.trim());
+            } catch (NumberFormatException e) {
+                setErrorMessage(request, "Invalid tier ID");
+                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+                return;
             }
-            
-        } catch (NumberFormatException e) {
-            setErrorMessage(request, "Invalid tier ID");
+
+            // Get tier name for confirmation message
+            TierDTO tier = tierService.getTierById(id);
+            String tierName = tier != null ? tier.getTierName() : "Unknown";
+
+            boolean success = tierService.deleteTier(id);
+
+            if (success) {
+                setSuccessMessage(request, "Tier '" + tierName + "' deleted successfully!");
+            } else {
+                setErrorMessage(request, "Failed to delete tier. It may be in use by clients.");
+            }
+
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error deleting tier: " + e.getMessage(), e);
             setErrorMessage(request, "Error deleting tier: " + e.getMessage());
         }
-        
-        // Redirect back to tier management
-        response.sendRedirect(request.getContextPath() + "/DashboardServlet?action=tiermanagement");
+
+        response.sendRedirect(request.getContextPath() + "/DashboardServlet");
     }
 
     /**
-     * Get the action parameter from the request, with fallback to default
+     * Get action parameter with default - same as BookServlet
      */
     private String getActionFromRequest(HttpServletRequest request) {
         String action = request.getParameter("action");
-        
+
         if (action == null || action.trim().isEmpty()) {
-            action = "dashboard";
-            LOGGER.info("DashboardServlet: No action specified, using default: " + action);
+            action = "tiers"; // Default action
         } else {
             action = action.trim();
         }
-        
+
         return action;
     }
 
     /**
-     * Handle main dashboard page with summary data
+     * Check if user is authenticated - same as BookServlet pattern
      */
-    private void handleDashboard(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        
-        try {
-            User user = (User) request.getSession().getAttribute("user");
-            
-            // Ensure the user is logged in
-            if (user == null) {
-                handleError(request, response, "User is not logged in.");
-                return;
-            }
-
-            // Set user attributes
-            request.setAttribute("currentUser", user);
-            request.setAttribute("isManager", "manager".equals(user.getRole()));
-            
-            // Load dashboard data
-            loadDashboardData(request);
-            
-            // Forward to dashboard JSP
-            request.getRequestDispatcher("/views/dashboard.jsp").forward(request, response);
-            
-            LOGGER.info("DashboardServlet: Successfully loaded dashboard for user: " + user.getUsername());
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "DashboardServlet: Error loading dashboard: " + e.getMessage(), e);
-            handleError(request, response, "Error loading dashboard data: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Load all dashboard data including tiers and statistics
-     */
-    private void loadDashboardData(HttpServletRequest request) {
-        try {
-            // Load tiers data
-            List<TierDTO> tiers = tierService.getAllTiers();
-            request.setAttribute("tiers", tiers);
-            
-            // Load dashboard statistics
-            loadDashboardStatistics(request);
-            
-            LOGGER.info("DashboardServlet: Dashboard data loaded successfully");
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Error loading dashboard data: " + e.getMessage(), e);
-            // Set empty values if data loading fails
-            request.setAttribute("totalBooks", 0);
-            request.setAttribute("totalClients", 0);
-            request.setAttribute("totalOrders", 0);
-            request.setAttribute("totalRevenue", "0.00");
-            request.setAttribute("totalTiers", 0);
-        }
-    }
-
-    /**
-     * Load dashboard statistics with actual implementations
-     */
-    private void loadDashboardStatistics(HttpServletRequest request) {
-        try {
-            int totalTiers = getTotalTiers();
-            int totalBooks = getTotalBooks();
-            int totalOrders = getTotalOrders();
-            String totalRevenue = getTotalRevenue();
-            
-            // Set attributes
-            request.setAttribute("totalBooks", totalBooks);
-            request.setAttribute("totalOrders", totalOrders);
-            request.setAttribute("totalRevenue", totalRevenue);
-            request.setAttribute("totalTiers", totalTiers);
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Error loading statistics: " + e.getMessage(), e);
-            // Set default values on error
-            request.setAttribute("totalBooks", 0);
-            request.setAttribute("totalClients", 0);
-            request.setAttribute("totalOrders", 0);
-            request.setAttribute("totalRevenue", "0.00");
-            request.setAttribute("totalTiers", 0);
-        }
-    }
-
-    /**
-     * Handle statistics page
-     */
-    private void handleStatistics(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        
-        try {
-            User user = (User) request.getSession().getAttribute("user");
-            
-            // Set user attributes
-            request.setAttribute("currentUser", user);
-            request.setAttribute("isManager", "manager".equals(user.getRole()));
-            
-            // Load detailed statistics
-            loadDetailedStatistics(request);
-            
-            // Forward to statistics JSP
-            request.getRequestDispatcher("/views/statistics.jsp").forward(request, response);
-            
-            LOGGER.info("DashboardServlet: Successfully loaded statistics");
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "DashboardServlet: Error loading statistics: " + e.getMessage(), e);
-            handleError(request, response, "Error loading statistics: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Load detailed statistics for statistics page
-     */
-    private void loadDetailedStatistics(HttpServletRequest request) {
-        try {
-            // Basic statistics
-            loadDashboardStatistics(request);
-            
-            // Additional detailed statistics
-            List<TierDTO> tiers = tierService.getAllTiers();
-            request.setAttribute("allTiers", tiers);
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Error loading detailed statistics: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Get total tiers count
-     */
-    private int getTotalTiers() {
-        try {
-            return tierService.getAllTiers().size();
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Error getting total tiers count: " + e.getMessage(), e);
-            return 0;
-        }
-    }
-
-    /**
-     * Get total books count
-     */
-    private int getTotalBooks() {
-        try {
-            return dashboardService.getTotalBooksCount();
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Error getting total books count: " + e.getMessage(), e);
-            return 0;
-        }
-    }
-
-    /**
-     * Get total orders count - Placeholder
-     */
-    private int getTotalOrders() {
-        return 0; // Replace with actual logic when OrderService is available
-    }
-
-    /**
-     * Get total revenue - Placeholder
-     */
-    private String getTotalRevenue() {
-        return "0.00"; // Replace with actual logic when OrderService is available
-    }
-
-    /**
-     * Check if user is authenticated
-     */
-    private boolean isUserAuthenticated(HttpServletRequest request, HttpServletResponse response) 
+    private boolean isUserAuthenticated(HttpServletRequest request, HttpServletResponse response)
             throws IOException {
-        
+
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("user") == null) {
             response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=Please login to access this page");
             return false;
         }
-        
+
         return true;
     }
 
     /**
-     * Handle errors by setting error message and redirecting
+     * Handle errors - simplified like BookServlet
      */
     private void handleError(HttpServletRequest request, HttpServletResponse response, String errorMessage)
             throws ServletException, IOException {
-        
-        // Set error message in session
+
         setErrorMessage(request, errorMessage);
         
-        // Try to load basic dashboard data even on error
+        // Set basic attributes and forward to JSP
+        request.setAttribute("tiers", new ArrayList<>());
+        request.setAttribute("pageTitle", "Tier Management");
+        
         try {
-            User user = (User) request.getSession().getAttribute("user");
-            if (user != null) {
-                request.setAttribute("currentUser", user);
-                request.setAttribute("isManager", "manager".equals(user.getRole()));
-            }
-            
-            // Set default values
-            request.setAttribute("totalBooks", 0);
-            request.setAttribute("totalClients", 0);
-            request.setAttribute("totalOrders", 0);
-            request.setAttribute("totalRevenue", "0.00");
-            request.setAttribute("totalTiers", 0);
-            
-            // Forward to dashboard
             request.getRequestDispatcher("/views/dashboard.jsp").forward(request, response);
-            
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "DashboardServlet: Critical error in error handling: " + e.getMessage(), e);
-            // If all else fails, redirect to login
-            response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=System error occurred");
+            response.sendRedirect(request.getContextPath() + "/views/login.jsp?error=System error");
         }
     }
 
     /**
-     * Set error message in session for display to user
+     * Set error message in session - same as BookServlet pattern
      */
     private void setErrorMessage(HttpServletRequest request, String message) {
         try {
             HttpSession session = request.getSession();
             session.setAttribute("errorMessage", message);
-            LOGGER.info("DashboardServlet: Error message set - " + message);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Failed to set error message: " + e.getMessage(), e);
+            LOGGER.log(Level.WARNING, "Failed to set error message: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Set success message in session for display to user
+     * Set success message in session - same as BookServlet pattern
      */
     private void setSuccessMessage(HttpServletRequest request, String message) {
         try {
             HttpSession session = request.getSession();
             session.setAttribute("successMessage", message);
-            LOGGER.info("DashboardServlet: Success message set - " + message);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "DashboardServlet: Failed to set success message: " + e.getMessage(), e);
+            LOGGER.log(Level.WARNING, "Failed to set success message: " + e.getMessage(), e);
         }
     }
 }

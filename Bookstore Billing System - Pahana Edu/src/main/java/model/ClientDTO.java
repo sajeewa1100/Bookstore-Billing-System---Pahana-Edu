@@ -456,19 +456,7 @@ public class ClientDTO implements Serializable {
         return tierName.equalsIgnoreCase(getTierLevel());
     }
     
-    /**
-     * Get discount percentage from tier
-     */
-    public double getDiscountPercentage() {
-        if (tier != null && tier.getDiscountPercentage() != null) {
-            return tier.getDiscountPercentage();
-        }
-        return 0.0;
-    }
     
-    /**
-     * Check if address is complete
-     */
     public boolean hasCompleteAddress() {
         return street != null && !street.trim().isEmpty() &&
                city != null && !city.trim().isEmpty() &&

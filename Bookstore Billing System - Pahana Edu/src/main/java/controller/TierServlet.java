@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 
 import model.User;
@@ -136,7 +137,7 @@ public class TierServlet extends HttpServlet {
     }
 
     /**
-     * Handle tier creation
+     * Handle tier creation - FIXED
      */
     private void handleCreateTier(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -154,23 +155,31 @@ public class TierServlet extends HttpServlet {
             }
             
             int minPoints = Integer.parseInt(minPointsStr);
-            int maxPoints = Integer.parseInt(maxPointsStr);
+            Integer maxPoints = null;
+            if (maxPointsStr != null && !maxPointsStr.trim().isEmpty()) {
+                maxPoints = Integer.parseInt(maxPointsStr);
+            }
             double discountRate = Double.parseDouble(discountRateStr);
             
             // Validate business logic
-            if (minPoints < 0 || maxPoints < 0) {
-                throw new IllegalArgumentException("Points cannot be negative");
+            if (minPoints < 0) {
+                throw new IllegalArgumentException("Minimum points cannot be negative");
             }
-            if (minPoints >= maxPoints) {
+            if (maxPoints != null && maxPoints < 0) {
+                throw new IllegalArgumentException("Maximum points cannot be negative");
+            }
+            if (maxPoints != null && minPoints >= maxPoints) {
                 throw new IllegalArgumentException("Minimum points must be less than maximum points");
             }
             if (discountRate < 0 || discountRate > 100) {
                 throw new IllegalArgumentException("Discount rate must be between 0 and 100");
             }
             
-            // Create tier
-            TierDTO newTier = new TierDTO(tierName.trim(), minPoints, maxPoints, discountRate);
-            boolean success = tierService.createTier(newTier);
+            // Create tier - Convert percentage to decimal
+            TierDTO newTier = new TierDTO(tierName.trim(), minPoints, maxPoints, 
+                                          BigDecimal.valueOf(discountRate / 100.0));
+            
+            boolean success = tierService.createTier(newTier); // FIXED: Now calls createTier
             
             if (success) {
                 request.getSession().setAttribute("successMessage", "Tier '" + tierName + "' created successfully!");
@@ -188,7 +197,7 @@ public class TierServlet extends HttpServlet {
     }
 
     /**
-     * Handle tier update
+     * Handle tier update - FIXED
      */
     private void handleUpdateTier(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -211,23 +220,32 @@ public class TierServlet extends HttpServlet {
             
             long tierId = Long.parseLong(tierIdStr);
             int minPoints = Integer.parseInt(minPointsStr);
-            int maxPoints = Integer.parseInt(maxPointsStr);
+            Integer maxPoints = null;
+            if (maxPointsStr != null && !maxPointsStr.trim().isEmpty()) {
+                maxPoints = Integer.parseInt(maxPointsStr);
+            }
             double discountRate = Double.parseDouble(discountRateStr);
             
             // Validate business logic
-            if (minPoints < 0 || maxPoints < 0) {
-                throw new IllegalArgumentException("Points cannot be negative");
+            if (minPoints < 0) {
+                throw new IllegalArgumentException("Minimum points cannot be negative");
             }
-            if (minPoints >= maxPoints) {
+            if (maxPoints != null && maxPoints < 0) {
+                throw new IllegalArgumentException("Maximum points cannot be negative");
+            }
+            if (maxPoints != null && minPoints >= maxPoints) {
                 throw new IllegalArgumentException("Minimum points must be less than maximum points");
             }
             if (discountRate < 0 || discountRate > 100) {
                 throw new IllegalArgumentException("Discount rate must be between 0 and 100");
             }
             
-            // Update tier
-            TierDTO updatedTier = new TierDTO(tierName.trim(), minPoints, maxPoints, discountRate);
-            boolean success = tierService.updateTier(updatedTier, tierId);
+            // Create updated tier with ID
+            TierDTO updatedTier = new TierDTO(tierName.trim(), minPoints, maxPoints, 
+                                              BigDecimal.valueOf(discountRate / 100.0));
+            updatedTier.setId(tierId); // IMPORTANT: Set the ID before updating
+            
+            boolean success = tierService.updateTier(updatedTier); // FIXED: Now calls single parameter method
             
             if (success) {
                 request.getSession().setAttribute("successMessage", "Tier '" + tierName + "' updated successfully!");
@@ -305,6 +323,4 @@ public class TierServlet extends HttpServlet {
         request.getSession().setAttribute("errorMessage", errorMessage);
         response.sendRedirect(request.getContextPath() + "/TierServlet?action=list");
     }
-    
-    
 }
