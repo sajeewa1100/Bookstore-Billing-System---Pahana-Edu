@@ -5,12 +5,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
-/**
- * Command to cancel billing
- */
 class CancelBillingCommand implements BillingCommand {
     
+    private static final Logger LOGGER = Logger.getLogger(CancelBillingCommand.class.getName());
     private BillingService billingService;
     
     public CancelBillingCommand(BillingService billingService) {
@@ -32,13 +33,13 @@ class CancelBillingCommand implements BillingCommand {
             
             if (success) {
                 request.getSession().setAttribute("successMessage", "Bill cancelled successfully");
-                System.out.println("CancelBillingCommand: Bill cancelled - ID: " + billId);
+                LOGGER.info("CancelBillingCommand: Bill cancelled - ID: " + billId);
             } else {
                 request.getSession().setAttribute("errorMessage", "Failed to cancel bill");
             }
             
         } catch (Exception e) {
-            System.err.println("CancelBillingCommand: Error - " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error cancelling bill", e);
             request.getSession().setAttribute("errorMessage", "Error cancelling bill: " + e.getMessage());
         }
         

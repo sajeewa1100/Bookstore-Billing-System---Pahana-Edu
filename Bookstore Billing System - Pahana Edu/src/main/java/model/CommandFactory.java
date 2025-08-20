@@ -1,12 +1,12 @@
 package model;
 
-import service.BookService;
-import service.ClientService;
 import service.BillingService;
+import service.ClientService;
+import service.BookService;
 
 /**
  * Factory class to create command objects based on action
- * Updated to support billing operations
+ * Updated to support books, clients, and billing operations
  */
 public class CommandFactory {
 
@@ -74,8 +74,7 @@ public class CommandFactory {
         if (action == null) return null;
 
         switch (action.toLowerCase()) {
-            case "billings":
-                return new ViewBillingCommand(billingService, clientService, bookService);
+           
             case "create":
                 return new CreateBillingCommand(billingService, clientService, bookService);
             case "view":
@@ -84,8 +83,7 @@ public class CommandFactory {
                 return new PrintBillingCommand(billingService);
             case "complete":
                 return new CompleteBillingCommand(billingService);
-            case "cancel":
-                return new CancelBillingCommand(billingService);
+           
             case "delete":
                 return new DeleteBillingCommand(billingService);
             default:

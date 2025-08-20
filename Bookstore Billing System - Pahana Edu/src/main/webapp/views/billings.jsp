@@ -1,594 +1,338 @@
-<%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billing Management - Bookstore</title>
+    <title>Create New Bill - Pahana Bookstore</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=1.0" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        .billing-form { max-width: 1200px; margin: 0 auto; }
+        .form-section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select, .form-group textarea { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .search-section { display: flex; gap: 10px; align-items: end; }
+        .btn-search { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-search:hover { background-color: #0056b3; }
+        .btn-search:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .client-info { background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin-top: 15px; display: none; }
+        .books-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .books-table th, .books-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        .books-table th { background-color: #f5f5f5; font-weight: bold; }
+        .books-table tr:hover { background-color: #f9f9f9; }
+        .quantity-input { width: 80px; text-align: center; }
+        .totals-section { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .final-total { font-weight: bold; font-size: 18px; border-top: 2px solid #333; padding-top: 10px; }
+        .form-actions { display: flex; gap: 15px; justify-content: flex-end; margin-top: 30px; }
+        .btn-primary { background-color: #28a745; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        .btn-secondary { background-color: #6c757d; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; }
+        .btn-primary:hover { background-color: #218838; }
+        .btn-primary:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .btn-secondary:hover { background-color: #545b62; }
+        .error-message { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .success-message { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .debug-info { background-color: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; font-family: monospace; }
+        .selected-books { margin-top: 20px; }
+        .selected-book-item { background: #e8f5e8; padding: 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .remove-book { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+        .text-success { color: #28a745; }
+        .text-danger { color: #dc3545; }
+        .client-list { max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: white; }
+        .client-item { padding: 5px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .client-item:hover { background-color: #f0f0f0; }
+        .client-item:last-child { border-bottom: none; }
+    </style>
 </head>
-
 <body>
-    <%-- Include Sidebar --%>
-    <jsp:include page="sidebar.jsp" flush="true" />
 
-    <main class="main-content">
-        <!-- Display Messages -->
-        <c:if test="${not empty sessionScope.successMessage}">
-            <div class="success-message alert-dismissible">
-                <i class="fas fa-check-circle"></i>
-                ${sessionScope.successMessage}
-                <button type="button" class="btn-close" data-bs-dismiss="alert">&times;</button>
-            </div>
-            <c:remove var="successMessage" scope="session" />
-        </c:if>
-        
-        <c:if test="${not empty sessionScope.errorMessage}">
-            <div class="error-message alert-dismissible">
-                <i class="fas fa-exclamation-circle"></i>
-                ${sessionScope.errorMessage}
-                <button type="button" class="btn-close" data-bs-dismiss="alert">&times;</button>
-            </div>
-            <c:remove var="errorMessage" scope="session" />
-        </c:if>
+<%-- Include Sidebar --%>
+<jsp:include page="sidebar.jsp" flush="true" />
 
-        <div class="billing-header">
-            <div class="billing-header-content">
-                <div class="billing-title-section">
-                    <h1><i class="fas fa-receipt"></i>Billing Management</h1>
-                    <p>Create, manage, and track all billing operations</p>
+<main class="main-content">
+    <div class="top-bar">
+        <h2 class="section-title">🧾 Create New Bill</h2>
+    </div>
+    
+    <hr />
+
+    <!-- Debug Information -->
+    <div class="debug-info" id="debugInfo" style="display: none;"></div>
+
+    <!-- Display Success/Error Messages -->
+    <div class="success-message" id="successMessage" style="display: none;"></div>
+    <div class="error-message" id="errorMessage" style="display: none;"></div>
+
+    <div class="billing-form">
+        <form id="billingForm" method="post" action="${pageContext.request.contextPath}/BillingServlet?action=create">
+            
+            <!-- Client Information Section -->
+            <div class="form-section">
+                <h3 class="section-title"><i class="fas fa-user"></i> Customer Information</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="clientPhone">Phone Number (Optional)</label>
+                        <div class="search-section">
+                            <input type="text" id="clientPhone" name="clientPhone" placeholder="Enter phone number">
+                            <button type="button" class="btn-search" onclick="searchClient()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="clientName">Customer Name *</label>
+                        <input type="text" id="clientName" name="clientName" required placeholder="Enter customer name">
+                        <input type="hidden" id="clientId" name="clientId">
+                    </div>
                 </div>
-                <div class="billing-action-section">
-                    <button class="btn-add-book" data-bs-toggle="modal" data-bs-target="#createBillModal">
-                        <i class="fas fa-plus"></i>Create New Bill
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="clientEmail">Email (Optional)</label>
+                        <input type="email" id="clientEmail" name="clientEmail" placeholder="customer@email.com">
+                    </div>
+                </div>
+                
+                <!-- Client Info Display -->
+                <div id="clientInfo" class="client-info">
+                    <h4><i class="fas fa-info-circle"></i> Customer Details</h4>
+                    <div id="clientDetails"></div>
+                </div>
+                
+                <div class="error-message" id="clientError" style="display: none;"></div>
+                
+                <!-- Clients List for Reference -->
+                <div style="margin-top: 15px;" id="clientsList">
+                    <h5>Available Clients:</h5>
+                    <div class="client-list" id="clientListContainer">
+                        <!-- Dynamically filled by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Book Selection Section -->
+            <div class="form-section">
+                <h3 class="section-title"><i class="fas fa-book"></i> Book Selection</h3>
+                
+                <div class="search-section" style="margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="bookIsbn">Search by ISBN</label>
+                        <input type="text" id="bookIsbn" placeholder="Enter ISBN">
+                    </div>
+                    <button type="button" class="btn-search" onclick="searchBook()" style="margin-top: 25px;">
+                        <i class="fas fa-search"></i> Search Book
                     </button>
                 </div>
-            </div>
-        </div>
 
-        <!-- Statistics Cards -->
-        <div class="stats-container">
-            <div class="stats-card">
-                <i class="fas fa-file-invoice"></i>
-                <h3>${totalBillings != null ? totalBillings : 0}</h3>
-                <p>Total Bills</p>
-            </div>
-            <div class="stats-card stats-blue">
-                <i class="fas fa-clock"></i>
-                <h3>${pendingBills != null ? pendingBills : 0}</h3>
-                <p>Pending Bills</p>
-            </div>
-            <div class="stats-card stats-orange">
-                <i class="fas fa-check-circle"></i>
-                <h3>${completedBills != null ? completedBills : 0}</h3>
-                <p>Completed Bills</p>
-            </div>
-            <div class="stats-card stats-purple">
-                <i class="fas fa-dollar-sign"></i>
-                <h3>Rs. <fmt:formatNumber value="${totalRevenue != null ? totalRevenue : 0}" type="number" minFractionDigits="2"/></h3>
-                <p>Total Revenue</p>
-            </div>
-        </div>
+                <div class="error-message" id="bookError" style="display: none;"></div>
 
-        <!-- Filter Section -->
-        <div class="filter-section billing-filter">
-            <form method="get" action="BillingServlet">
-                <div class="billing-filter-row">
-                    <div class="filter-group">
-                        <label class="form-label">Status Filter</label>
-                        <select name="status" class="form-select">
-                            <option value="">All Statuses</option>
-                            <option value="PENDING" ${param.status == 'PENDING' ? 'selected' : ''}>Pending</option>
-                            <option value="COMPLETED" ${param.status == 'COMPLETED' ? 'selected' : ''}>Completed</option>
-                            <option value="CANCELLED" ${param.status == 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
+                <!-- Books Display Logic -->
+                <div id="booksTableContainer" style="display: none;">
+                    <h4>Available Books</h4>
+                    <table class="books-table" id="booksTable">
+                        <thead>
+                            <tr>
+                                <th>Book Details</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Quantity</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="booksTableBody">
+                            <!-- Dynamically filled by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Payment Information Section -->
+            <div class="form-section">
+                <h3 class="section-title"><i class="fas fa-credit-card"></i> Payment Information</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paymentMethod">Payment Method *</label>
+                        <select id="paymentMethod" name="paymentMethod" required>
+                            <option value="CASH">Cash</option>
+                            <option value="CARD">Card</option>
+                            <option value="DIGITAL">Digital Payment</option>
                         </select>
                     </div>
-                    <div class="filter-group">
-                        <label class="form-label">Search by Client</label>
-                        <input type="text" name="clientSearch" class="form-control" placeholder="Enter client name..." value="${param.clientSearch}">
-                    </div>
-                    <div class="filter-group">
-                        <label class="form-label">From Date</label>
-                        <input type="date" name="fromDate" class="form-control" value="${param.fromDate}">
-                    </div>
-                    <div class="filter-group">
-                        <label class="form-label">To Date</label>
-                        <input type="date" name="toDate" class="form-control" value="${param.toDate}">
-                    </div>
-                    <div class="filter-group">
-                        <button type="submit" class="btn-filter">
-                            <i class="fas fa-filter"></i>Filter
-                        </button>
-                    </div>
                 </div>
-            </form>
-        </div>
-
-        <!-- Bills List -->
-        <div class="bills-grid">
-            <c:choose>
-                <c:when test="${empty billings}">
-                    <div class="no-books">
-                        <i class="fas fa-receipt"></i>
-                        <h3>No bills found</h3>
-                        <p>Create your first bill to get started</p>
-                        <button class="btn-add-book" data-bs-toggle="modal" data-bs-target="#createBillModal">
-                            Create New Bill
-                        </button>
-                    </div>
-                </c:when>
-                <c:otherwise>
-                    <c:forEach var="bill" items="${billings}">
-                        <div class="bill-card">
-                            <div class="bill-card-header">
-                                <h6><i class="fas fa-hashtag"></i> ${bill.billNumber}</h6>
-                                <span class="status-badge status-${fn:toLowerCase(bill.status)}">${bill.status}</span>
-                            </div>
-                            <div class="bill-card-body">
-                                <div class="bill-info-item">
-                                    <strong><i class="fas fa-user"></i> Client:</strong>
-                                    <span>${bill.clientName}</span>
-                                </div>
-                                <div class="bill-info-item">
-                                    <strong><i class="fas fa-calendar"></i> Date:</strong>
-                                    <span>${bill.formattedBillDateShort}</span>
-                                </div>
-                                <div class="bill-info-item">
-                                    <strong><i class="fas fa-book"></i> Items:</strong>
-                                    <span>${bill.totalItemsCount} book(s)</span>
-                                </div>
-                                <div class="bill-total">
-                                    <strong><i class="fas fa-dollar-sign"></i> Total:</strong>
-                                    <span class="bill-amount">Rs. <fmt:formatNumber value="${bill.totalAmount}" type="number" minFractionDigits="2"/></span>
-                                </div>
-                                <div class="bill-actions">
-                                    <button class="btn-view" onclick="viewBillDetails(${bill.id})">
-                                        <i class="fas fa-eye"></i> View
-                                    </button>
-                                    <button class="btn-print" onclick="printBill(${bill.id})">
-                                        <i class="fas fa-print"></i> Print
-                                    </button>
-                                    <c:if test="${bill.status == 'PENDING'}">
-                                        <button class="btn-complete" onclick="completeBill(${bill.id})">
-                                            <i class="fas fa-check"></i> Complete
-                                        </button>
-                                        <button class="btn-cancel" onclick="cancelBill(${bill.id})">
-                                            <i class="fas fa-times"></i> Cancel
-                                        </button>
-                                    </c:if>
-                                    <c:if test="${bill.status == 'CANCELLED'}">
-                                        <button class="btn-delete" onclick="deleteBill(${bill.id})">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </c:if>
-                                </div>
-                            </div>
-                        </div>
-                    </c:forEach>
-                </c:otherwise>
-            </c:choose>
-        </div>
-    </main>
-
-    <!-- Create Bill Modal -->
-    <div id="createBillModal" class="modal">
-        <div class="modal-content modal-xl">
-            <div class="modal-header">
-                <h3><i class="fas fa-plus"></i>Create New Bill</h3>
-                <span class="close" data-bs-dismiss="modal">&times;</span>
-            </div>
-            <form id="createBillForm" method="post" action="BillingServlet">
-                <div class="modal-body">
-                    <input type="hidden" name="action" value="create">
-                    
-                    <div class="bill-form-row">
-                        <div class="form-group">
-                            <label class="form-label">Select Client *</label>
-                            <select name="clientId" class="form-select" required>
-                                <option value="">Choose a client...</option>
-                                <c:forEach var="client" items="${clients}">
-                                    <option value="${client.id}">${client.firstName} ${client.lastName} - ${client.email}</option>
-                                </c:forEach>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Payment Method</label>
-                            <select name="paymentMethod" class="form-select">
-                                <option value="CASH">Cash</option>
-                                <option value="CARD">Card</option>
-                                <option value="ONLINE">Online</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Discount (%)</label>
-                            <input type="number" name="discountPercentage" class="form-control" min="0" max="100" value="0" step="0.01" onchange="calculateTotal()">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Notes (Optional)</label>
-                        <textarea name="notes" class="form-control" rows="2" placeholder="Add any additional notes..."></textarea>
-                    </div>
-
-                    <hr class="modal-divider">
-                    <h6 class="modal-section-title"><i class="fas fa-books"></i>Add Books to Bill</h6>
-                    
-                    <div id="bookItems">
-                        <div class="book-item-row">
-                            <div class="book-row-fields">
-                                <div class="form-group book-select-group">
-                                    <label class="form-label">Book</label>
-                                    <select name="bookIds" class="form-select book-select" required onchange="updateBookPrice(this)">
-                                        <option value="">Select a book...</option>
-                                        <c:forEach var="book" items="${books}">
-                                            <option value="${book.id}" data-price="${book.price}" data-stock="${book.quantity}" data-title="${book.title}" data-author="${book.author}" data-isbn="${book.isbn}">
-                                                ${book.title} - Rs. <fmt:formatNumber value="${book.price}" type="number" minFractionDigits="2"/> (Stock: ${book.quantity})
-                                            </option>
-                                        </c:forEach>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Price</label>
-                                    <input type="number" name="prices" class="form-control price-input" step="0.01" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Quantity</label>
-                                    <input type="number" name="quantities" class="form-control quantity-input" min="1" value="1" required onchange="calculateItemTotal(this)">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Subtotal</label>
-                                    <input type="number" class="form-control subtotal-input" readonly>
-                                </div>
-                                <div class="form-group book-remove-group">
-                                    <button type="button" class="btn-delete btn-remove-book" onclick="removeBookItem(this)">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="add-book-section">
-                        <button type="button" class="btn-add-book" onclick="addBookItem()">
-                            <i class="fas fa-plus"></i>Add Another Book
-                        </button>
-                    </div>
-
-                    <div class="bill-summary">
-                        <div class="summary-content">
-                            <div class="summary-title">
-                                <h6>Bill Summary</h6>
-                            </div>
-                            <div class="summary-details">
-                                <div class="summary-item">
-                                    <strong>Subtotal: Rs. <span id="billSubtotal">0.00</span></strong>
-                                </div>
-                                <div class="summary-item">
-                                    <span>Discount: -Rs. <span id="billDiscount">0.00</span></span>
-                                </div>
-                                <div class="summary-item">
-                                    <span>Tax (8%): +Rs. <span id="billTax">0.00</span></span>
-                                </div>
-                                <hr class="summary-divider">
-                                <div class="summary-total">
-                                    <h5>Total: Rs. <span id="billTotal">0.00</span></h5>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-save">
-                        <i class="fas fa-save"></i>Create Bill
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Bill Details Modal -->
-    <div id="billDetailsModal" class="modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h3><i class="fas fa-receipt"></i>Bill Details</h3>
-                <span class="close" data-bs-dismiss="modal">&times;</span>
-            </div>
-            <div class="modal-body" id="billDetailsContent">
-                <!-- Bill details will be loaded here via AJAX -->
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                    <span>Loading...</span>
+                
+                <div class="form-group">
+                    <label for="notes">Notes (Optional)</label>
+                    <textarea id="notes" name="notes" rows="3" placeholder="Any additional notes..."></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-cancel" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn-save no-print" onclick="window.print()">
-                    <i class="fas fa-print"></i>Print
+
+            <!-- Bill Totals Section -->
+            <div class="totals-section" id="totalsSection" style="display: none;">
+                <h3 class="section-title"><i class="fas fa-calculator"></i> Bill Summary</h3>
+                
+                <div class="total-row">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">Rs. 0.00</span>
+                </div>
+                <div class="total-row">
+                    <span>Tax (8%):</span>
+                    <span id="taxAmount">Rs. 0.00</span>
+                </div>
+                <div class="total-row final-total">
+                    <span>Total Amount:</span>
+                    <span id="totalAmount">Rs. 0.00</span>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <a href="${pageContext.request.contextPath}/BillingServlet?action=billings" class="btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Cancel
+                </a>
+                <button type="submit" class="btn-primary" id="submitBtn" disabled>
+                    <i class="fas fa-save"></i> Create Bill
                 </button>
             </div>
-        </div>
+
+            <!-- Hidden inputs for selected books -->
+            <div id="hiddenInputs"></div>
+        </form>
     </div>
+</main>
 
-    <script>
-        // Add book item functionality
-        function addBookItem() {
-            const bookItemsContainer = document.getElementById('bookItems');
-            const firstItem = document.querySelector('.book-item-row');
-            const newItem = firstItem.cloneNode(true);
-            
-            // Reset values in the new item
-            const select = newItem.querySelector('.book-select');
-            const priceInput = newItem.querySelector('.price-input');
-            const quantityInput = newItem.querySelector('.quantity-input');
-            const subtotalInput = newItem.querySelector('.subtotal-input');
-            
-            select.value = '';
-            priceInput.value = '';
-            quantityInput.value = '1';
-            subtotalInput.value = '';
-            
-            bookItemsContainer.appendChild(newItem);
-        }
+<script>
+    let selectedBooks = [];
+    let allBooks = [];
+    let allClients = [];
 
-        // Remove book item
-        function removeBookItem(button) {
-            const bookItems = document.querySelectorAll('.book-item-row');
-            if (bookItems.length > 1) {
-                button.closest('.book-item-row').remove();
-                calculateTotal();
-            } else {
-                alert('At least one book item is required.');
-            }
-        }
+    document.addEventListener('DOMContentLoaded', function() {
+        // Populate allBooks and allClients dynamically
+        allBooks = [
+            // Example static data; replace with actual data from server-side
+            { id: 1, title: "Book One", author: "Author A", price: 200, stock: 10, isbn: "1234567890", category: "Fiction" },
+            { id: 2, title: "Book Two", author: "Author B", price: 150, stock: 5, isbn: "0987654321", category: "Non-Fiction" }
+        ];
 
-        // Update book price when book is selected
-        function updateBookPrice(select) {
-            const selectedOption = select.options[select.selectedIndex];
-            const row = select.closest('.book-item-row');
-            const priceInput = row.querySelector('.price-input');
-            const quantityInput = row.querySelector('.quantity-input');
-            
-            if (selectedOption.value) {
-                const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
-                const stock = parseInt(selectedOption.getAttribute('data-stock')) || 0;
-                
-                priceInput.value = price.toFixed(2);
-                quantityInput.max = stock;
-                
-                // Reset quantity if it exceeds available stock
-                if (parseInt(quantityInput.value) > stock) {
-                    quantityInput.value = Math.min(1, stock);
-                }
-                
-                calculateItemTotal(quantityInput);
-            } else {
-                priceInput.value = '';
-                quantityInput.max = '';
-                calculateItemTotal(quantityInput);
-            }
-        }
+        allClients = [
+            // Example static data; replace with actual data from server-side
+            { id: 1, fullName: "Client One", email: "client1@example.com", phone: "111-111-1111", tierLevel: "Gold", loyaltyPoints: 100 },
+            { id: 2, fullName: "Client Two", email: "client2@example.com", phone: "222-222-2222", tierLevel: "Silver", loyaltyPoints: 50 }
+        ];
 
-        // Calculate item subtotal
-        function calculateItemTotal(element) {
-            const row = element.closest('.book-item-row');
-            const price = parseFloat(row.querySelector('.price-input').value) || 0;
-            const quantity = parseInt(row.querySelector('.quantity-input').value) || 0;
-            const subtotal = price * quantity;
-            row.querySelector('.subtotal-input').value = subtotal.toFixed(2);
-            calculateTotal();
-        }
-
-        // Calculate bill total
-        function calculateTotal() {
-            let subtotal = 0;
-            document.querySelectorAll('.subtotal-input').forEach(input => {
-                subtotal += parseFloat(input.value) || 0;
-            });
-
-            const discountPercentage = parseFloat(document.querySelector('input[name="discountPercentage"]').value) || 0;
-            const taxPercentage = 8; // Fixed 8% tax as per your backend
-
-            const discountAmount = (subtotal * discountPercentage) / 100;
-            const taxableAmount = subtotal - discountAmount;
-            const taxAmount = (taxableAmount * taxPercentage) / 100;
-            const total = taxableAmount + taxAmount;
-
-            document.getElementById('billSubtotal').textContent = subtotal.toFixed(2);
-            document.getElementById('billDiscount').textContent = discountAmount.toFixed(2);
-            document.getElementById('billTax').textContent = taxAmount.toFixed(2);
-            document.getElementById('billTotal').textContent = total.toFixed(2);
-        }
-
-        // Bill action functions
-        function viewBillDetails(billId) {
-            const modal = document.getElementById('billDetailsModal');
-            const content = document.getElementById('billDetailsContent');
-            
-            // Show loading spinner
-            content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading...</span></div>';
-            modal.style.display = 'block';
-            
-            fetch(`BillingServlet?action=view&id=${billId}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    content.innerHTML = html;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    content.innerHTML = '<div class="error-message">Error loading bill details. Please try again.</div>';
-                });
-        }
-
-        function printBill(billId) {
-            const printWindow = window.open(`BillingServlet?action=print&id=${billId}`, '_blank');
-            if (printWindow) {
-                printWindow.onload = function() {
-                    printWindow.print();
-                };
-            }
-        }
-
-        function completeBill(billId) {
-            if (confirm('Are you sure you want to mark this bill as completed?')) {
-                submitAction('complete', billId);
-            }
-        }
-
-        function cancelBill(billId) {
-            if (confirm('Are you sure you want to cancel this bill?')) {
-                submitAction('cancel', billId);
-            }
-        }
-
-        function deleteBill(billId) {
-            if (confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
-                submitAction('delete', billId);
-            }
-        }
-
-        function submitAction(action, billId) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'BillingServlet';
-            
-            const actionInput = document.createElement('input');
-            actionInput.type = 'hidden';
-            actionInput.name = 'action';
-            actionInput.value = action;
-            
-            const idInput = document.createElement('input');
-            idInput.type = 'hidden';
-            idInput.name = 'id';
-            idInput.value = billId;
-            
-            form.appendChild(actionInput);
-            form.appendChild(idInput);
-            document.body.appendChild(form);
-            form.submit();
-        }
-
-        // Form validation
-        document.getElementById('createBillForm').addEventListener('submit', function(e) {
-            const bookSelects = document.querySelectorAll('.book-select');
-            let hasValidBook = false;
-            let hasEmptyRow = false;
-            
-            bookSelects.forEach(select => {
-                if (select.value) {
-                    hasValidBook = true;
-                } else {
-                    // Check if this row has any data
-                    const row = select.closest('.book-item-row');
-                    const quantity = row.querySelector('.quantity-input').value;
-                    if (quantity && quantity > 0) {
-                        hasEmptyRow = true;
-                    }
-                }
-            });
-            
-            if (!hasValidBook) {
-                e.preventDefault();
-                alert('Please select at least one book for the bill.');
-                return false;
-            }
-            
-            if (hasEmptyRow) {
-                e.preventDefault();
-                alert('Please select a book for all rows or remove empty rows.');
-                return false;
-            }
-            
-            // Validate quantities don't exceed stock
-            let stockError = false;
-            let stockErrorMessage = '';
-            
-            bookSelects.forEach(select => {
-                if (select.value) {
-                    const row = select.closest('.book-item-row');
-                    const quantity = parseInt(row.querySelector('.quantity-input').value) || 0;
-                    const stock = parseInt(select.options[select.selectedIndex].getAttribute('data-stock')) || 0;
-                    const title = select.options[select.selectedIndex].getAttribute('data-title');
-                    
-                    if (quantity > stock) {
-                        stockError = true;
-                        stockErrorMessage += `"${title}" - Requested: ${quantity}, Available: ${stock}\n`;
-                    }
-                }
-            });
-            
-            if (stockError) {
-                e.preventDefault();
-                alert('Some items exceed available stock:\n' + stockErrorMessage);
-                return false;
-            }
+        // Populate clients list
+        let clientListContainer = document.getElementById("clientListContainer");
+        allClients.forEach(client => {
+            let clientDiv = document.createElement("div");
+            clientDiv.classList.add("client-item");
+            clientDiv.innerHTML = `<strong>${client.fullName}</strong><br><small>Email: ${client.email}</small><br><small>Phone: ${client.phone}</small>`;
+            clientDiv.onclick = function() { selectClient(client.id, client.fullName, client.email, client.phone); };
+            clientListContainer.appendChild(clientDiv);
         });
 
-        // Modal functionality
-        function openModal(modalId) {
-            document.getElementById(modalId).style.display = 'block';
+        // Populate book table
+        let booksTableBody = document.getElementById("booksTableBody");
+        allBooks.forEach(book => {
+            let row = document.createElement("tr");
+            row.innerHTML = `
+                <td><strong>${book.title}</strong><br><em>by ${book.author}</em></td>
+                <td>Rs. ${book.price}</td>
+                <td>${book.stock}</td>
+                <td><input type="number" id="qty_${book.id}" min="1" max="${book.stock}" value="1"></td>
+                <td><button type="button" class="btn-search" onclick="addBook(${book.id})"><i class="fas fa-plus"></i> Add</button></td>
+            `;
+            booksTableBody.appendChild(row);
+        });
+    });
+
+    function selectClient(id, name, email, phone) {
+        document.getElementById("clientId").value = id;
+        document.getElementById("clientName").value = name;
+        document.getElementById("clientEmail").value = email;
+        document.getElementById("clientPhone").value = phone;
+        document.getElementById("clientInfo").style.display = "block";
+        document.getElementById("clientDetails").innerHTML = `
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+        `;
+    }
+
+    function searchClient() {
+        let phone = document.getElementById("clientPhone").value.trim();
+        let client = allClients.find(c => c.phone === phone);
+        if (client) {
+            selectClient(client.id, client.fullName, client.email, client.phone);
+        } else {
+            alert("Client not found!");
+        }
+    }
+
+    function searchBook() {
+        let isbn = document.getElementById("bookIsbn").value.trim();
+        let book = allBooks.find(b => b.isbn === isbn);
+        if (book) {
+            alert(`Found book: ${book.title}`);
+        } else {
+            alert("Book not found!");
+        }
+    }
+
+    function addBook(bookId) {
+        let book = allBooks.find(b => b.id === bookId);
+        let qty = document.getElementById(`qty_${bookId}`).value;
+        if (qty <= 0 || qty > book.stock) {
+            alert("Invalid quantity");
+            return;
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+        let existingBook = selectedBooks.find(b => b.id === bookId);
+        if (existingBook) {
+            existingBook.quantity += parseInt(qty);
+        } else {
+            selectedBooks.push({...book, quantity: qty});
         }
+        updateSelectedBooks();
+        calculateTotals();
+    }
 
-        // Close modal when clicking outside or on close button
-        window.onclick = function(event) {
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(modal => {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-        }
-
-        document.querySelectorAll('.close').forEach(closeBtn => {
-            closeBtn.onclick = function() {
-                this.closest('.modal').style.display = 'none';
-            }
+    function updateSelectedBooks() {
+        let selectedBooksList = document.getElementById("selectedBooksList");
+        selectedBooksList.innerHTML = "";
+        selectedBooks.forEach(book => {
+            let item = document.createElement("div");
+            item.classList.add("selected-book-item");
+            item.innerHTML = `
+                <div><strong>${book.title}</strong> × ${book.quantity}</div>
+                <button class="remove-book" onclick="removeBook(${book.id})">Remove</button>
+            `;
+            selectedBooksList.appendChild(item);
         });
+    }
 
-        document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => {
-            btn.onclick = function() {
-                this.closest('.modal').style.display = 'none';
-            }
-        });
+    function removeBook(bookId) {
+        selectedBooks = selectedBooks.filter(b => b.id !== bookId);
+        updateSelectedBooks();
+        calculateTotals();
+    }
 
-        // Initialize calculations when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            calculateTotal();
-            
-            // Auto-dismiss alerts after 5 seconds
-            setTimeout(function() {
-                const alerts = document.querySelectorAll('.alert-dismissible');
-                alerts.forEach(alert => {
-                    alert.style.transition = 'opacity 0.3s';
-                    alert.style.opacity = '0';
-                    setTimeout(() => alert.style.display = 'none', 300);
-                });
-            }, 5000);
-        });
+    function calculateTotals() {
+        let subtotal = selectedBooks.reduce((total, book) => total + (book.price * book.quantity), 0);
+        let tax = subtotal * 0.08;
+        let total = subtotal + tax;
 
-        // Close alert manually
-        document.querySelectorAll('.btn-close').forEach(btn => {
-            btn.onclick = function() {
-                const alert = this.closest('.alert-dismissible');
-                alert.style.transition = 'opacity 0.3s';
-                alert.style.opacity = '0';
-                setTimeout(() => alert.style.display = 'none', 300);
-            }
-        });
-    </script>
+        document.getElementById("subtotal").textContent = `Rs. ${subtotal.toFixed(2)}`;
+        document.getElementById("taxAmount").textContent = `Rs. ${tax.toFixed(2)}`;
+        document.getElementById("totalAmount").textContent = `Rs. ${total.toFixed(2)}`;
+
+        document.getElementById("totalsSection").style.display = "block";
+    }
+</script>
+
 </body>
 </html>

@@ -3,16 +3,14 @@ package dao;
 import model.BookDTO;
 import util.ConnectionManager;
 
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class BookDAO {
 
-    /**
-     * Get all categories from the categories table
-     */
+
+  
     public List<String> getAllCategories() {
         List<String> categories = new ArrayList<>();
         String sql = "SELECT name FROM categories ORDER BY name";
@@ -41,12 +39,15 @@ public class BookDAO {
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
+            // Log for debugging
+            System.out.println("🔍 Executing SQL: " + sql);
+            
             while (rs.next()) {
                 BookDTO book = new BookDTO(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("author"),
-                    rs.getBigDecimal("price"),  // Use getBigDecimal instead of getDouble
+                    rs.getBigDecimal("price"),
                     rs.getString("category"),
                     rs.getString("isbn"),
                     rs.getInt("quantity"),
@@ -54,9 +55,14 @@ public class BookDAO {
                 );
                 books.add(book);
             }
+            
+            // Log the size of books retrieved
+            System.out.println("📚 Retrieved " + books.size() + " books.");
+            
         } catch (SQLException e) {
             throw new RuntimeException("Error getting all books: " + e.getMessage(), e);
         }
+        
         return books;
     }
 
@@ -157,6 +163,42 @@ public class BookDAO {
             
         } catch (SQLException e) {
             throw new RuntimeException("Error getting book by ID: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Search book by ISBN - ADDED METHOD FOR BILLING
+     */
+    public BookDTO searchBookByISBN(String isbn) {
+        if (isbn == null || isbn.trim().isEmpty()) {
+            return null;
+        }
+        
+        String sql = "SELECT id, title, author, category, price, isbn, quantity, publisher FROM books WHERE isbn = ? LIMIT 1";
+        
+        try (Connection conn = ConnectionManager.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, isbn.trim());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return new BookDTO(
+                    rs.getInt("id"),
+                    rs.getString("title"),
+                    rs.getString("author"),
+                    rs.getBigDecimal("price"),
+                    rs.getString("category"),
+                    rs.getString("isbn"),
+                    rs.getInt("quantity"),
+                    rs.getString("publisher")
+                );
+            }
+            
+            return null;
+            
+        } catch (SQLException e) {
+            throw new RuntimeException("Error searching book by ISBN: " + e.getMessage(), e);
         }
     }
 

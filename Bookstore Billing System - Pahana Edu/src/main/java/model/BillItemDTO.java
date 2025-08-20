@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 
 /**
  * Data Transfer Object for Bill Items
- * Represents individual items in a billing transaction
  */
 public class BillItemDTO {
     
@@ -22,17 +21,29 @@ public class BillItemDTO {
      * Default constructor
      */
     public BillItemDTO() {
-        this.quantity = 0;
+        this.quantity = 1;
         this.unitPrice = BigDecimal.ZERO;
         this.total = BigDecimal.ZERO;
     }
     
     /**
-     * Constructor with book information
+     * Constructor with BookDTO and quantity
+     */
+    public BillItemDTO(BookDTO book, Integer quantity) {
+        this.bookId = book.getId();
+        this.bookTitle = book.getTitle();
+        this.bookAuthor = book.getAuthor();
+        this.bookIsbn = book.getIsbn();
+        this.unitPrice = book.getPrice();
+        this.quantity = quantity;
+        calculateTotal();
+    }
+    
+    /**
+     * Constructor with basic details
      */
     public BillItemDTO(Integer bookId, String bookTitle, String bookAuthor, 
                       String bookIsbn, BigDecimal unitPrice, Integer quantity) {
-        this();
         this.bookId = bookId;
         this.bookTitle = bookTitle;
         this.bookAuthor = bookAuthor;
@@ -43,38 +54,14 @@ public class BillItemDTO {
     }
     
     /**
-     * Constructor from BookDTO
-     */
-    public BillItemDTO(BookDTO book, Integer quantity) {
-        this(book.getId(), book.getTitle(), book.getAuthor(), 
-             book.getIsbn(), book.getPrice(), quantity);
-    }
-    
-    /**
      * Calculate total amount for this item
      */
     public void calculateTotal() {
         if (unitPrice != null && quantity != null) {
-            this.total = unitPrice.multiply(new BigDecimal(quantity));
+            this.total = unitPrice.multiply(BigDecimal.valueOf(quantity));
         } else {
             this.total = BigDecimal.ZERO;
         }
-    }
-    
-    /**
-     * Set quantity and recalculate total
-     */
-    public void setQuantityAndCalculate(Integer quantity) {
-        this.quantity = quantity;
-        calculateTotal();
-    }
-    
-    /**
-     * Set unit price and recalculate total
-     */
-    public void setUnitPriceAndCalculate(BigDecimal unitPrice) {
-        this.unitPrice = unitPrice;
-        calculateTotal();
     }
     
     /**
@@ -170,6 +157,7 @@ public class BillItemDTO {
     public String toString() {
         return "BillItemDTO{" +
                 "id=" + id +
+                ", bookId=" + bookId +
                 ", bookTitle='" + bookTitle + '\'' +
                 ", quantity=" + quantity +
                 ", unitPrice=" + unitPrice +

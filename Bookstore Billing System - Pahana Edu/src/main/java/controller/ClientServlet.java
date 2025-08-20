@@ -121,10 +121,10 @@ public class ClientServlet extends HttpServlet {
         String clientId = request.getParameter("id");
         try {
             Long clientIdLong = Long.parseLong(clientId);
-            String clientProfileHtml = clientService.getClientProfileHtml(clientIdLong);
+          
             response.setContentType("text/html");
             response.setCharacterEncoding("UTF-8");
-            response.getWriter().write(clientProfileHtml);
+       
         } catch (Exception e) {
             e.printStackTrace();
             response.getWriter().write("<p class='error'>Error loading client profile.</p>");

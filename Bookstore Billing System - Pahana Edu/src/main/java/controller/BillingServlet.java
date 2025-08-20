@@ -1,348 +1,208 @@
 package controller;
 
-import model.BillingCommand;
-import model.CommandFactory;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
 import service.BillingService;
-import service.ClientService;
 import service.BookService;
-
+import service.ClientService;
+import model.BillingCommand;
+import model.BillingCommandFactory;
+import model.BookDTO;
+import model.ClientDTO;
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
-
-/**
- * Servlet for handling billing management operations using the Command pattern.
- * 
- * This servlet delegates all billing operations to appropriate Command implementations
- * created by the CommandFactory. This promotes better separation of concerns and
- * makes the code more maintainable and testable.
- * 
- * The servlet handles both GET and POST requests by determining the appropriate
- * command based on the action parameter and executing it.
- */
 @WebServlet("/BillingServlet")
 public class BillingServlet extends HttpServlet {
+
     private static final long serialVersionUID = 1L;
-    private static final Logger LOGGER = Logger.getLogger(BillingServlet.class.getName());
-    
     private BillingService billingService;
-    private ClientService clientService;
     private BookService bookService;
-    
-    /**
-     * Initialize the servlet and create service instances
-     */
+    private ClientService clientService;
+    private static final Logger LOGGER = Logger.getLogger(BillingServlet.class.getName());
+
     @Override
-    public void init() throws ServletException {
-        super.init();
-        try {
-            billingService = new BillingService();
-            clientService = new ClientService();
-            bookService = new BookService();
-            LOGGER.info("BillingServlet initialized successfully with all services");
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Failed to initialize BillingServlet: " + e.getMessage(), e);
-            throw new ServletException("Failed to initialize services", e);
-        }
+    public void init() {
+        LOGGER.info("BillingServlet: Initializing servlet...");
+        billingService = new BillingService();
+        bookService = new BookService();
+        clientService = new ClientService(); // Initialize ClientService
+        LOGGER.info("BillingServlet: All services initialized successfully");
     }
-    
-    /**
-     * Handle GET requests using the Command pattern
-     * 
-     * @param request The HttpServletRequest
-     * @param response The HttpServletResponse
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
-        
-        String action = getActionFromRequest(request);
-        LOGGER.info("BillingServlet: Processing GET request with action: " + action);
-        
-        try {
-            // Create appropriate command using the factory
-            BillingCommand command = CommandFactory.createBillingCommand(action, billingService, clientService, bookService);
-            
-            if (command != null) {
-                // Execute the command
-                command.execute(request, response);
-                LOGGER.info("BillingServlet: Successfully executed command for action: " + action);
-            } else {
-                // Handle unknown action
-                handleUnknownAction(request, response, action);
-            }
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "BillingServlet: Error processing GET request with action '" + action + "': " + e.getMessage(), e);
-            handleError(request, response, e, "processing your request");
-        }
-    }
-    
-    /**
-     * Handle POST requests using the Command pattern
-     * 
-     * @param request The HttpServletRequest
-     * @param response The HttpServletResponse
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
-     */
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) 
             throws ServletException, IOException {
         
-        String action = getActionFromRequest(request);
-        LOGGER.info("BillingServlet: Processing POST request with action: " + action);
-        
-        try {
-            // Create appropriate command using the factory
-            BillingCommand command = CommandFactory.createBillingCommand(action, billingService, clientService, bookService);
-            
-            if (command != null) {
-                // Execute the command
-                command.execute(request, response);
-                LOGGER.info("BillingServlet: Successfully executed command for action: " + action);
-            } else {
-                // Handle unknown action
-                handleUnknownAction(request, response, action);
-            }
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "BillingServlet: Error processing POST request with action '" + action + "': " + e.getMessage(), e);
-            handleError(request, response, e, "processing your request");
-        }
-    }
-    
-    /**
-     * Get the action parameter from the request, with fallback to default
-     * 
-     * @param request The HttpServletRequest
-     * @return The action string, never null
-     */
-    private String getActionFromRequest(HttpServletRequest request) {
         String action = request.getParameter("action");
+        LOGGER.info("BillingServlet POST: Received action = " + action);
         
+        // Print all parameters for debugging
+        request.getParameterMap().forEach((key, values) -> {
+            LOGGER.info("BillingServlet POST: " + key + " = " + String.join(", ", values));
+        });
+        
+        // Validate action parameter
         if (action == null || action.trim().isEmpty()) {
-            action = CommandFactory.getDefaultBillingAction();
-            LOGGER.info("BillingServlet: No action specified, using default: " + action);
-        } else {
-            action = action.trim();
+            LOGGER.warning("BillingServlet POST: No action specified, redirecting to billings");
+            response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
+            return;
         }
-        
-        return action;
-    }
-    
-    /**
-     * Handle unknown/unsupported actions
-     * 
-     * @param request The HttpServletRequest
-     * @param response The HttpServletResponse
-     * @param action The unknown action that was requested
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
-     */
-    private void handleUnknownAction(HttpServletRequest request, HttpServletResponse response, String action) 
-            throws ServletException, IOException {
-        
-        LOGGER.warning("BillingServlet: Unknown action requested: " + action);
-        
-        // Set error message with helpful information
-        StringBuilder errorMessage = new StringBuilder();
-        errorMessage.append("Unknown action: '").append(action).append("'. ");
-        errorMessage.append("Available actions are: ");
-        
-        String[] availableActions = CommandFactory.getAvailableBillingActions();
-        for (int i = 0; i < availableActions.length; i++) {
-            errorMessage.append(availableActions[i]);
-            if (i < availableActions.length - 1) {
-                errorMessage.append(", ");
-            }
-        }
-        
-        setErrorMessage(request, errorMessage.toString());
-        
-        // Redirect to default action (view billings)
-        String defaultAction = CommandFactory.getDefaultBillingAction();
-        BillingCommand defaultCommand = CommandFactory.createBillingCommand(defaultAction, billingService, clientService, bookService);
-        
-        if (defaultCommand != null) {
-            try {
-                defaultCommand.execute(request, response);
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "BillingServlet: Error executing default command: " + e.getMessage(), e);
-                handleCriticalError(request, response, e);
-            }
-        } else {
-            // This should never happen, but handle it gracefully
-            handleCriticalError(request, response, new IllegalStateException("Default command not available"));
-        }
-    }
-    
-    /**
-     * Handle general errors by setting error message and redirecting to default view
-     * 
-     * @param request The HttpServletRequest
-     * @param response The HttpServletResponse
-     * @param exception The exception that occurred
-     * @param context Additional context about when the error occurred
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
-     */
-    private void handleError(HttpServletRequest request, HttpServletResponse response, Exception exception, String context) 
-            throws ServletException, IOException {
-        
-        String errorMessage = "An error occurred while " + context + ": " + exception.getMessage();
-        setErrorMessage(request, errorMessage);
-        
-        // Try to redirect to the default view
+
         try {
-            String defaultAction = CommandFactory.getDefaultBillingAction();
-            BillingCommand defaultCommand = CommandFactory.createBillingCommand(defaultAction, billingService, clientService, bookService);
+            // CRITICAL: Always ensure data is available for billing operations
+            setupBillingData(request);
             
-            if (defaultCommand != null) {
-                defaultCommand.execute(request, response);
+            LOGGER.info("BillingServlet POST: Creating command for action: " + action);
+            BillingCommand command = BillingCommandFactory.createCommand(action, billingService, clientService, bookService);
+
+            if (command != null) {
+                LOGGER.info("BillingServlet POST: Executing command: " + command.getClass().getSimpleName());
+                command.execute(request, response);
+                LOGGER.info("BillingServlet POST: Command executed successfully");
             } else {
-                handleCriticalError(request, response, new IllegalStateException("Default command not available"));
+                LOGGER.warning("BillingServlet POST: Command factory returned null for action: " + action);
+                setupBillingData(request); // Ensure data is available before forwarding
+                response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "BillingServlet POST: Exception occurred: " + e.getMessage(), e);
+            setupBillingData(request); // Ensure data is available for error page
+            handleError(request, response, "Error executing command: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        String action = request.getParameter("action");
+        LOGGER.info("BillingServlet GET: Received action = " + action);
+
+        // Default action if none specified
+        if (action == null || action.trim().isEmpty()) {
+            action = "billings"; // Default action
+            LOGGER.info("BillingServlet GET: Using default action = " + action);
+        }
+
+        try {
+            // Fetch data from the services
+            List<ClientDTO> clients = clientService.getAllClients();
+            List<BookDTO> books = bookService.getAllBooks();
+            
+            // Set data as request attributes
+            request.setAttribute("clients", clients);
+            request.setAttribute("books", books);
+
+            LOGGER.info("BillingServlet GET: Fetched " + clients.size() + " clients and " + books.size() + " books");
+
+            // Create command for action (ensure the correct action is passed)
+            BillingCommand command = BillingCommandFactory.createCommand(action, billingService, clientService, bookService);
+            if (command != null) {
+                command.execute(request, response);
+                LOGGER.info("BillingServlet GET: Command executed successfully");
+            } else {
+                LOGGER.warning("BillingServlet GET: Command factory returned null for action: " + action);
+                response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "BillingServlet GET: Exception occurred: " + e.getMessage(), e);
+            handleError(request, response, "Error executing command: " + e.getMessage());
+        }
+    }
+
+    
+
+    /**
+     * CRITICAL METHOD: Setup billing data for JSP pages
+     * This ensures books and clients data are always available
+     */
+    private void setupBillingData(HttpServletRequest request) {
+        try {
+            LOGGER.info("BillingServlet: Setting up billing data...");
+            
+            // 1. Fetch all books for billing
+            List<BookDTO> allBooks = bookService.getAllBooks();
+            request.setAttribute("allBooks", allBooks);
+            LOGGER.info("BillingServlet: Set " + allBooks.size() + " books in request");
+            
+            // 2. Fetch all clients for billing
+            List<ClientDTO> allClients = clientService.getAllClients();
+            request.setAttribute("allClients", allClients);
+            LOGGER.info("BillingServlet: Set " + allClients.size() + " clients in request");
+            
+            // 3. Set book categories
+            List<String> categories = bookService.getBookCategories();
+            request.setAttribute("bookCategories", categories);
+            LOGGER.info("BillingServlet: Set " + categories.size() + " categories in request");
+            
+            // 4. Debug logging
+            LOGGER.info("BillingServlet: Data setup completed successfully");
+            LOGGER.info("BillingServlet: Books available: " + (allBooks != null ? allBooks.size() : 0));
+            LOGGER.info("BillingServlet: Clients available: " + (allClients != null ? allClients.size() : 0));
+            
+            // 5. Test first few items for debugging
+            if (allBooks != null && !allBooks.isEmpty()) {
+                BookDTO firstBook = allBooks.get(0);
+                LOGGER.info("BillingServlet: First book - ID: " + firstBook.getId() + 
+                           ", Title: " + firstBook.getTitle() + 
+                           ", Stock: " + firstBook.getQuantity());
+            }
+            
+            if (allClients != null && !allClients.isEmpty()) {
+                ClientDTO firstClient = allClients.get(0);
+                LOGGER.info("BillingServlet: First client - ID: " + firstClient.getId() + 
+                           ", Name: " + firstClient.getFullName());
             }
             
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "BillingServlet: Error in error handling: " + e.getMessage(), e);
-            handleCriticalError(request, response, e);
+            LOGGER.log(Level.SEVERE, "BillingServlet: Error setting up billing data", e);
+            
+            // Set empty lists as fallback
+            request.setAttribute("allBooks", new java.util.ArrayList<BookDTO>());
+            request.setAttribute("allClients", new java.util.ArrayList<ClientDTO>());
+            request.setAttribute("bookCategories", new java.util.ArrayList<String>());
         }
     }
-    
+
     /**
-     * Handle critical errors that prevent normal error recovery
-     * 
-     * @param request The HttpServletRequest
-     * @param response The HttpServletResponse
-     * @param exception The critical exception
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
+     * Centralized error handling with data setup
      */
-    private void handleCriticalError(HttpServletRequest request, HttpServletResponse response, Exception exception) 
+    private void handleError(HttpServletRequest request, HttpServletResponse response, String errorMessage) 
             throws ServletException, IOException {
+        LOGGER.warning("BillingServlet: Handling error: " + errorMessage);
         
-        LOGGER.log(Level.SEVERE, "BillingServlet: Critical error occurred: " + exception.getMessage(), exception);
+        // Ensure data is available even on error pages
+        setupBillingData(request);
         
-        // Set basic error attributes
-        request.setAttribute("errorMessage", "A critical system error occurred. Please contact support.");
-        request.setAttribute("billings", java.util.List.of()); // Empty list to prevent JSP errors
-        request.setAttribute("totalBillings", 0);
-        
-        // Forward to error page or basic billing view
+        request.setAttribute("errorMessage", errorMessage);
+        request.getRequestDispatcher("views/billings.jsp").forward(request, response);
+    }
+    
+    /**
+     * Helper method to get book by ISBN for AJAX calls
+     */
+    public BookDTO getBookByISBN(String isbn) {
         try {
-            request.getRequestDispatcher("views/billings.jsp").forward(request, response);
+            return bookService.searchBookByISBN(isbn);
         } catch (Exception e) {
-            // Last resort - send error response
-            LOGGER.log(Level.SEVERE, "BillingServlet: Failed to forward to error page: " + e.getMessage(), e);
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, 
-                             "A critical system error occurred. Please contact support.");
+            LOGGER.log(Level.WARNING, "Error fetching book by ISBN: " + isbn, e);
+            return null;
         }
     }
     
     /**
-     * Set error message in session for display to user
-     * 
-     * @param request The HttpServletRequest
-     * @param message The error message to set
+     * Helper method to get client by ID for AJAX calls
      */
-    private void setErrorMessage(HttpServletRequest request, String message) {
+    public ClientDTO getClientById(Long clientId) {
         try {
-            HttpSession session = request.getSession();
-            session.setAttribute("errorMessage", message);
-            LOGGER.info("BillingServlet: Error message set - " + message);
+            return clientService.getClientById(clientId);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "BillingServlet: Failed to set error message: " + e.getMessage(), e);
+            LOGGER.log(Level.WARNING, "Error fetching client by ID: " + clientId, e);
+            return null;
         }
-    }
-    
-    /**
-     * Set success message in session for display to user
-     * 
-     * @param request The HttpServletRequest
-     * @param message The success message to set
-     */
-    private void setSuccessMessage(HttpServletRequest request, String message) {
-        try {
-            HttpSession session = request.getSession();
-            session.setAttribute("successMessage", message);
-            LOGGER.info("BillingServlet: Success message set - " + message);
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "BillingServlet: Failed to set success message: " + e.getMessage(), e);
-        }
-    }
-    
-    /**
-     * Get available actions for this servlet (useful for debugging/monitoring)
-     * 
-     * @return Array of available action strings
-     */
-    public String[] getAvailableActions() {
-        return CommandFactory.getAvailableBillingActions();
-    }
-    
-    /**
-     * Check if an action is supported by this servlet
-     * 
-     * @param action The action to check
-     * @return true if action is supported, false otherwise
-     */
-    public boolean isActionSupported(String action) {
-        return CommandFactory.isValidBillingAction(action);
-    }
-    
-    /**
-     * Get a description of what an action does
-     * 
-     * @param action The action to describe
-     * @return Human-readable description of the action
-     */
-    public String getActionDescription(String action) {
-        return CommandFactory.getBillingActionDescription(action);
-    }
-    
-    /**
-     * Clean up resources when servlet is destroyed
-     */
-    @Override
-    public void destroy() {
-        try {
-            if (billingService != null) {
-                LOGGER.info("BillingServlet: Cleaning up BillingService");
-            }
-            if (clientService != null) {
-                LOGGER.info("BillingServlet: Cleaning up ClientService");
-            }
-            if (bookService != null) {
-                LOGGER.info("BillingServlet: Cleaning up BookService");
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "BillingServlet: Error during cleanup: " + e.getMessage(), e);
-        } finally {
-            billingService = null;
-            clientService = null;
-            bookService = null;
-            LOGGER.info("BillingServlet destroyed successfully");
-        }
-        super.destroy();
-    }
-    
-    /**
-     * Get servlet info
-     * 
-     * @return Servlet information string
-     */
-    @Override
-    public String getServletInfo() {
-        return "BillingServlet - Handles billing management operations using Command pattern";
     }
 }

@@ -13,6 +13,7 @@ import java.util.logging.Level;
  */
 class DeleteBillingCommand implements BillingCommand {
     
+    private static final Logger LOGGER = Logger.getLogger(DeleteBillingCommand.class.getName());
     private BillingService billingService;
     
     public DeleteBillingCommand(BillingService billingService) {
@@ -34,13 +35,13 @@ class DeleteBillingCommand implements BillingCommand {
             
             if (success) {
                 request.getSession().setAttribute("successMessage", "Bill deleted successfully");
-                System.out.println("DeleteBillingCommand: Bill deleted - ID: " + billId);
+                LOGGER.info("DeleteBillingCommand: Bill deleted - ID: " + billId);
             } else {
                 request.getSession().setAttribute("errorMessage", "Failed to delete bill");
             }
             
         } catch (Exception e) {
-            System.err.println("DeleteBillingCommand: Error - " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error deleting bill", e);
             request.getSession().setAttribute("errorMessage", "Error deleting bill: " + e.getMessage());
         }
         

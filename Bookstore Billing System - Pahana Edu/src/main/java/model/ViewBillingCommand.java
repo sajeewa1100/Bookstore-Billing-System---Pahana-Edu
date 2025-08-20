@@ -12,38 +12,42 @@ import java.util.List;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-public class ViewBillingCommand implements BillingCommand {
-
+class ViewBillingCommand implements BillingCommand {
+    
+    private static final Logger LOGGER = Logger.getLogger(ViewBillingCommand.class.getName());
     private BillingService billingService;
-    private ClientService clientService;  // Add ClientService
-    private BookService bookService;     // Add BookService
-
-    public ViewBillingCommand(BillingService billingService, ClientService clientService, BookService bookService) {
+    
+    public ViewBillingCommand(BillingService billingService) {
         this.billingService = billingService;
-        this.clientService = clientService;
-        this.bookService = bookService;
     }
-
+    
     @Override
-    public void execute(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    public void execute(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        
         try {
-            // Fetch and filter billings based on the request parameters
-            List<BillingDTO> billings = billingService.getAllBills(); // Default fetch all bills
+            String idStr = request.getParameter("id");
+            if (idStr == null || idStr.trim().isEmpty()) {
+                throw new IllegalArgumentException("Bill ID is required");
+            }
             
-            // Fetch clients and books
-            List<ClientDTO> clients = clientService.getAllClients();
-            List<BookDTO> books = bookService.getAllBooks();
-
-            // Set all data for JSP
-            request.setAttribute("clients", clients);
-            request.setAttribute("books", books);
-            request.setAttribute("billings", billings);
-
-            request.getRequestDispatcher("views/billings.jsp").forward(request, response);
+            Long billId = Long.parseLong(idStr);
+            BillingDTO bill = billingService.getBillById(billId);
+            
+            if (bill == null) {
+                throw new IllegalArgumentException("Bill not found with ID: " + billId);
+            }
+            
+            request.setAttribute("bill", bill);
+            LOGGER.info("ViewBillingCommand: Viewing bill: " + bill.getBillNumber());
+            
+            // Forward to bill view page
+            request.getRequestDispatcher("/views/view-billing.jsp").forward(request, response);
+            
         } catch (Exception e) {
-            e.printStackTrace();
-            request.setAttribute("errorMessage", "Error loading billings: " + e.getMessage());
-            request.getRequestDispatcher("views/billings.jsp").forward(request, response);
+            LOGGER.log(Level.SEVERE, "Error viewing bill", e);
+            request.getSession().setAttribute("errorMessage", "Error viewing bill: " + e.getMessage());
+            response.sendRedirect(request.getContextPath() + "/BillingServlet?action=billings");
         }
     }
 }

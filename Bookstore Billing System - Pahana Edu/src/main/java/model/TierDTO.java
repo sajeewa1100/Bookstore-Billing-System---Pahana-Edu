@@ -3,10 +3,12 @@ package model;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 /**
- * FIXED TierDTO - Compatible with JSP requirements
+ * Data Transfer Object for Tier information
+ * Represents customer loyalty tiers with discount rates and point requirements
  */
 public class TierDTO implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -23,6 +25,8 @@ public class TierDTO implements Serializable {
     public TierDTO() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.discountRate = BigDecimal.ZERO;
+        this.minPoints = 0;
     }
 
     // Constructor for creating tiers with BigDecimal
@@ -33,7 +37,7 @@ public class TierDTO implements Serializable {
         this.maxPoints = maxPoints;
         this.discountRate = discountRate;
     }
-    
+
     // Constructor for creating tiers with double (converts to BigDecimal)
     public TierDTO(String tierName, int minPoints, Integer maxPoints, double discountRate) {
         this();
@@ -168,6 +172,116 @@ public class TierDTO implements Serializable {
             discountRate.compareTo(BigDecimal.ONE) > 0) return false;
         return true;
     }
+
+    /**
+     * Check if a point amount qualifies for this tier
+     */
+    public boolean qualifiesForTier(int points) {
+        if (points < minPoints) {
+            return false;
+        }
+        
+        if (maxPoints != null && points > maxPoints) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Get formatted discount rate as percentage
+     */
+    public String getFormattedDiscountRateWithSymbol() {
+        if (discountRate == null) {
+            return "0%";
+        }
+        return discountRate.multiply(BigDecimal.valueOf(100)).toString() + "%";
+    }
+    
+    /**
+     * Get discount rate as decimal (for calculations)
+     */
+    public BigDecimal getDiscountRateDecimal() {
+        if (discountRate == null) {
+            return BigDecimal.ZERO;
+        }
+        return discountRate.divide(new BigDecimal("100"));
+    }
+    
+    /**
+     * Get formatted point range
+     */
+    public String getPointRange() {
+        if (maxPoints != null) {
+            return minPoints + " - " + maxPoints + " points";
+        } else {
+            return minPoints + "+ points";
+        }
+    }
+    
+    /**
+     * Get tier color for UI display
+     */
+    public String getTierColor() {
+        if (tierName == null) {
+            return "#gray";
+        }
+        
+        switch (tierName.toLowerCase()) {
+            case "bronze":
+                return "#CD7F32";
+            case "silver":
+                return "#C0C0C0";
+            case "gold":
+                return "#FFD700";
+            case "platinum":
+                return "#E5E4E2";
+            default:
+                return "#6B7280";
+        }
+    }
+    
+    /**
+     * Get tier icon for UI display
+     */
+    public String getTierIcon() {
+        if (tierName == null) {
+            return "fas fa-star";
+        }
+        
+        switch (tierName.toLowerCase()) {
+            case "bronze":
+                return "fas fa-medal";
+            case "silver":
+                return "fas fa-award";
+            case "gold":
+                return "fas fa-trophy";
+            case "platinum":
+                return "fas fa-crown";
+            default:
+                return "fas fa-star";
+        }
+    }
+    
+    /**
+     * Get formatted created date
+     */
+    public String getFormattedCreatedAt() {
+        if (createdAt != null) {
+            return createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        return "";
+    }
+    
+    /**
+     * Get formatted created date (short)
+     */
+    public String getFormattedCreatedAtShort() {
+        if (createdAt != null) {
+            return createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        }
+        return "";
+    }
     
     @Override
     public String toString() {
@@ -178,25 +292,24 @@ public class TierDTO implements Serializable {
                 ", maxPoints=" + maxPoints +
                 ", discountRate=" + discountRate +
                 ", discountRateAsPercentage=" + getDiscountRateAsPercentage() +
-                '}';
+                '}'; 
     }
-    
+
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         
-        TierDTO tierDTO = (TierDTO) obj;
+        TierDTO tierDTO = (TierDTO) o;
         
-        if (id != null) {
-            return id.equals(tierDTO.id);
-        }
-        
-        return tierName != null && tierName.equals(tierDTO.tierName);
+        if (id != null ? !id.equals(tierDTO.id) : tierDTO.id != null) return false;
+        return tierName != null ? tierName.equals(tierDTO.tierName) : tierDTO.tierName == null;
     }
     
     @Override
     public int hashCode() {
-        return id != null ? id.hashCode() : (tierName != null ? tierName.hashCode() : 0);
+        int result = id != null ? id.hashCode() : 0;
+        result = 31 * result + (tierName != null ? tierName.hashCode() : 0);
+        return result;
     }
 }
