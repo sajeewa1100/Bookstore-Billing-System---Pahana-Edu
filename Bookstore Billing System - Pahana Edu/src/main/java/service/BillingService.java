@@ -1,520 +1,386 @@
 package service;
 
 import dao.BillingDAO;
+import dao.ClientDAO;
 import dao.BookDAO;
 import model.BillingDTO;
-import model.BillItemDTO;
+import model.BillingItemDTO;
+import model.ClientDTO;
 import model.BookDTO;
 
-import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- * Service layer for Billing operations
- * Contains business logic for billing transactions
- */
 public class BillingService {
-    
+
     private static final Logger LOGGER = Logger.getLogger(BillingService.class.getName());
     
-    // DAO instances
-    private BillingDAO billingDAO;
-    private BookDAO bookDAO;
-    
-    /**
-     * Constructor
-     */
+    private final BillingDAO billingDAO;
+    private final ClientDAO clientDAO;
+    private final BookDAO bookDAO;
+
     public BillingService() {
         this.billingDAO = new BillingDAO();
+        this.clientDAO = new ClientDAO();
         this.bookDAO = new BookDAO();
     }
-    
+
     /**
-     * Create a new bill
+     * Create a new billing record
      */
-    public boolean createBill(BillingDTO bill) {
+    public boolean createBilling(BillingDTO billing) {
         try {
-            // Validate bill data
-            String validationError = validateBill(bill);
-            if (validationError != null) {
-                LOGGER.warning("Bill validation failed: " + validationError);
-                throw new IllegalArgumentException(validationError);
+            // Validate billing data
+            if (!validateBilling(billing)) {
+                LOGGER.warning("BillingService: Invalid billing data provided");
+                return false;
             }
-            
-            // Check if bill number already exists
-            if (billingDAO.billNumberExists(bill.getBillNumber())) {
-                bill.generateBillNumber(); // Generate new bill number
+
+            // Generate bill number if not provided
+            if (billing.getBillNumber() == null || billing.getBillNumber().isEmpty()) {
+                billing.generateBillNumber();
             }
+
+            // Recalculate amounts to ensure accuracy
+            billing.recalculateAmounts();
+
+            // Create billing record
+            boolean created = billingDAO.createBilling(billing);
             
-            // Validate book availability and quantities
-            if (!validateBookAvailability(bill)) {
-                throw new IllegalArgumentException("Some books are not available in requested quantities");
-            }
-            
-            // Calculate totals
-            bill.calculateTotals();
-            
-            boolean result = billingDAO.createBill(bill);
-            
-            if (result) {
-                LOGGER.info("Bill created successfully: " + bill.getBillNumber());
-            } else {
-                LOGGER.warning("Failed to create bill: " + bill.getBillNumber());
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while creating bill: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to create bill due to system error", e);
-        }
-    }
-    
-    /**
-     * Get all bills
-     */
-    public List<BillingDTO> getAllBills() {
-        try {
-            List<BillingDTO> bills = billingDAO.getAllBills();
-            LOGGER.info("Retrieved " + bills.size() + " bills");
-            return bills;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving bills: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve bills due to system error", e);
-        }
-    }
-    
-    /**
-     * Get bill by ID
-     */
-    public BillingDTO getBillById(Long id) {
-        if (id == null || id <= 0) {
-            throw new IllegalArgumentException("Invalid bill ID");
-        }
-        
-        try {
-            BillingDTO bill = billingDAO.getBillById(id);
-            
-            if (bill != null) {
-                LOGGER.info("Bill found: " + bill.getBillNumber());
-            } else {
-                LOGGER.info("No bill found with ID: " + id);
-            }
-            
-            return bill;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving bill: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve bill due to system error", e);
-        }
-    }
-    
-    /**
-     * Get bill by bill number
-     */
-    public BillingDTO getBillByNumber(String billNumber) {
-        if (billNumber == null || billNumber.trim().isEmpty()) {
-            throw new IllegalArgumentException("Bill number is required");
-        }
-        
-        try {
-            return billingDAO.getBillByNumber(billNumber.trim());
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving bill by number: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve bill due to system error", e);
-        }
-    }
-    
-    /**
-     * Complete a bill (mark as COMPLETED)
-     */
-    public boolean completeBill(Long billId) {
-        if (billId == null || billId <= 0) {
-            throw new IllegalArgumentException("Invalid bill ID");
-        }
-        
-        try {
-            // Check if bill exists and is in PENDING status
-            BillingDTO bill = billingDAO.getBillById(billId);
-            if (bill == null) {
-                throw new IllegalArgumentException("Bill not found with ID: " + billId);
-            }
-            
-            if (!"PENDING".equals(bill.getStatus())) {
-                throw new IllegalArgumentException("Only pending bills can be completed");
-            }
-            
-            boolean result = billingDAO.updateBillStatus(billId, "COMPLETED");
-            
-            if (result) {
-                LOGGER.info("Bill completed successfully: " + bill.getBillNumber());
-            } else {
-                LOGGER.warning("Failed to complete bill with ID: " + billId);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while completing bill: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to complete bill due to system error", e);
-        }
-    }
-    
-    /**
-     * Cancel a bill (mark as CANCELLED)
-     */
-    public boolean cancelBill(Long billId) {
-        if (billId == null || billId <= 0) {
-            throw new IllegalArgumentException("Invalid bill ID");
-        }
-        
-        try {
-            // Check if bill exists and can be cancelled
-            BillingDTO bill = billingDAO.getBillById(billId);
-            if (bill == null) {
-                throw new IllegalArgumentException("Bill not found with ID: " + billId);
-            }
-            
-            if ("CANCELLED".equals(bill.getStatus())) {
-                throw new IllegalArgumentException("Bill is already cancelled");
-            }
-            
-            boolean result = billingDAO.updateBillStatus(billId, "CANCELLED");
-            
-            if (result) {
-                LOGGER.info("Bill cancelled successfully: " + bill.getBillNumber());
+            if (created) {
+                LOGGER.info("BillingService: Billing created successfully - " + billing.getBillNumber());
                 
-                // TODO: In future, restore book quantities when cancelling a bill
-                // restoreBookQuantities(bill);
-            } else {
-                LOGGER.warning("Failed to cancel bill with ID: " + billId);
+                // Update client loyalty points if applicable
+                updateClientLoyaltyPoints(billing);
+                
+                return true;
             }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while cancelling bill: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to cancel bill due to system error", e);
+
+            return false;
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error creating billing", e);
+            return false;
         }
     }
-    
+
     /**
-     * Delete a bill
+     * Get all billings
      */
-    public boolean deleteBill(Long billId) {
-        if (billId == null || billId <= 0) {
-            throw new IllegalArgumentException("Invalid bill ID for deletion");
-        }
-        
+    public List<BillingDTO> getAllBillings() {
         try {
-            // Check if bill exists
-            BillingDTO existingBill = billingDAO.getBillById(billId);
-            if (existingBill == null) {
-                throw new IllegalArgumentException("Bill not found with ID: " + billId);
-            }
-            
-            // Only allow deletion of cancelled or pending bills
-            if ("COMPLETED".equals(existingBill.getStatus())) {
-                throw new IllegalArgumentException("Cannot delete completed bills");
-            }
-            
-            boolean result = billingDAO.deleteBill(billId);
-            
-            if (result) {
-                LOGGER.info("Bill deleted successfully with ID: " + billId);
-            } else {
-                LOGGER.warning("Failed to delete bill with ID: " + billId);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while deleting bill: " + e.getMessage(), e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-            throw new RuntimeException("Failed to delete bill due to system error", e);
+            return billingDAO.getAllBillings();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error retrieving all billings", e);
+            throw new RuntimeException("Error retrieving billings: " + e.getMessage(), e);
         }
     }
-    
+
     /**
-     * Search bills by client name
+     * Get billing by ID with full details
      */
-    public List<BillingDTO> searchBillsByClient(String clientName) {
-        if (clientName == null || clientName.trim().isEmpty()) {
-            return getAllBills();
-        }
-        
+    public BillingDTO getBillingById(Long billingId) {
         try {
-            List<BillingDTO> bills = billingDAO.searchBillsByClient(clientName.trim());
-            LOGGER.info("Search returned " + bills.size() + " bills for client: " + clientName);
-            return bills;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while searching bills by client: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to search bills due to system error", e);
-        }
-    }
-    
-    /**
-     * Get bills by status
-     */
-    public List<BillingDTO> getBillsByStatus(String status) {
-        if (status == null || status.trim().isEmpty()) {
-            return getAllBills();
-        }
-        
-        try {
-            List<BillingDTO> bills = billingDAO.getBillsByStatus(status.trim().toUpperCase());
-            LOGGER.info("Retrieved " + bills.size() + " bills with status: " + status);
-            return bills;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving bills by status: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve bills due to system error", e);
-        }
-    }
-    
-    /**
-     * Get bills by date range
-     */
-    public List<BillingDTO> getBillsByDateRange(String fromDate, String toDate) {
-        if (fromDate == null || toDate == null) {
-            throw new IllegalArgumentException("From date and to date are required");
-        }
-        
-        try {
-            List<BillingDTO> bills = billingDAO.getBillsByDateRange(fromDate, toDate);
-            LOGGER.info("Retrieved " + bills.size() + " bills for date range: " + fromDate + " to " + toDate);
-            return bills;
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while retrieving bills by date range: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to retrieve bills due to system error", e);
-        }
-    }
-    
-    /**
-     * Get billing statistics
-     */
-    public BillingStatistics getBillingStatistics() {
-        try {
-            int totalBills = billingDAO.getTotalBillsCount();
-            BigDecimal totalSales = billingDAO.getTotalSalesAmount();
-            
-            List<BillingDTO> pendingBills = billingDAO.getBillsByStatus("PENDING");
-            List<BillingDTO> completedBills = billingDAO.getBillsByStatus("COMPLETED");
-            List<BillingDTO> cancelledBills = billingDAO.getBillsByStatus("CANCELLED");
-            
-            return new BillingStatistics(totalBills, totalSales, 
-                                       pendingBills.size(), completedBills.size(), cancelledBills.size());
-            
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while getting billing statistics: " + e.getMessage(), e);
-            throw new RuntimeException("Failed to get billing statistics due to system error", e);
-        }
-    }
-    
-    /**
-     * Generate printable bill HTML
-     */
-    public String generatePrintableBill(Long billId) {
-        BillingDTO bill = getBillById(billId);
-        if (bill == null) {
-            throw new IllegalArgumentException("Bill not found");
-        }
-        
-        StringBuilder html = new StringBuilder();
-        html.append("<div class='printable-bill'>");
-        
-        // Header
-        html.append("<div class='bill-header'>");
-        html.append("<h1>Pahana Bookstore</h1>");
-        html.append("<p>123 Main Street, Colombo, Sri Lanka</p>");
-        html.append("<p>Phone: +94 11 234 5678 | Email: info@pahanabookstore.lk</p>");
-        html.append("<hr>");
-        html.append("</div>");
-        
-        // Bill Info
-        html.append("<div class='bill-info'>");
-        html.append("<div class='bill-details'>");
-        html.append("<h3>Bill #: ").append(bill.getBillNumber()).append("</h3>");
-        html.append("<p><strong>Date:</strong> ").append(bill.getFormattedBillDate()).append("</p>");
-        html.append("<p><strong>Status:</strong> ").append(bill.getStatus()).append("</p>");
-        if (bill.getPaymentMethod() != null) {
-            html.append("<p><strong>Payment:</strong> ").append(bill.getPaymentMethod()).append("</p>");
-        }
-        html.append("</div>");
-        
-        // Client Info
-        html.append("<div class='client-details'>");
-        html.append("<h4>Bill To:</h4>");
-        html.append("<p><strong>").append(bill.getClientName()).append("</strong></p>");
-        if (bill.getClientEmail() != null) {
-            html.append("<p>").append(bill.getClientEmail()).append("</p>");
-        }
-        if (bill.getClientPhone() != null) {
-            html.append("<p>").append(bill.getClientPhone()).append("</p>");
-        }
-        html.append("</div>");
-        html.append("</div>");
-        
-        // Items Table
-        html.append("<div class='bill-items'>");
-        html.append("<table class='items-table'>");
-        html.append("<thead>");
-        html.append("<tr>");
-        html.append("<th>Item</th>");
-        html.append("<th>Qty</th>");
-        html.append("<th>Price</th>");
-        html.append("<th>Total</th>");
-        html.append("</tr>");
-        html.append("</thead>");
-        html.append("<tbody>");
-        
-        for (BillItemDTO item : bill.getItems()) {
-            html.append("<tr>");
-            html.append("<td>");
-            html.append("<strong>").append(item.getBookTitle()).append("</strong><br>");
-            html.append("<small>by ").append(item.getBookAuthor()).append("</small>");
-            if (item.getBookIsbn() != null && !item.getBookIsbn().isEmpty()) {
-                html.append("<br><small>ISBN: ").append(item.getBookIsbn()).append("</small>");
+            if (billingId == null) {
+                return null;
             }
-            html.append("</td>");
-            html.append("<td>").append(item.getQuantity()).append("</td>");
-            html.append("<td>Rs. ").append(item.getUnitPrice()).append("</td>");
-            html.append("<td>Rs. ").append(item.getTotal()).append("</td>");
-            html.append("</tr>");
+            return billingDAO.getBillingById(billingId);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error retrieving billing by ID: " + billingId, e);
+            throw new RuntimeException("Error retrieving billing: " + e.getMessage(), e);
         }
-        
-        html.append("</tbody>");
-        html.append("</table>");
-        html.append("</div>");
-        
-        // Totals
-        html.append("<div class='bill-totals'>");
-        html.append("<table class='totals-table'>");
-        html.append("<tr><td>Subtotal:</td><td>Rs. ").append(bill.getSubtotal()).append("</td></tr>");
-        
-        if (bill.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            html.append("<tr><td>Discount:</td><td>-Rs. ").append(bill.getDiscountAmount()).append("</td></tr>");
-        }
-        
-        html.append("<tr><td>Tax (8%):</td><td>Rs. ").append(bill.getTaxAmount()).append("</td></tr>");
-        html.append("<tr class='total-row'><td><strong>Total:</strong></td><td><strong>Rs. ").append(bill.getTotalAmount()).append("</strong></td></tr>");
-        html.append("</table>");
-        html.append("</div>");
-        
-        // Footer
-        html.append("<div class='bill-footer'>");
-        if (bill.getNotes() != null && !bill.getNotes().isEmpty()) {
-            html.append("<p><strong>Notes:</strong> ").append(bill.getNotes()).append("</p>");
-        }
-        html.append("<hr>");
-        html.append("<p><center>Thank you for your business!</center></p>");
-        html.append("</div>");
-        
-        html.append("</div>");
-        
-        return html.toString();
     }
-    
+
     /**
-     * Validate bill data
+     * Update billing status
      */
-    private String validateBill(BillingDTO bill) {
-        if (bill == null) {
-            return "Bill data is required";
+    public boolean updateBillingStatus(Long billingId, String status) {
+        try {
+            if (billingId == null || status == null) {
+                return false;
+            }
+
+            boolean updated = billingDAO.updateBillingStatus(billingId, status.toUpperCase());
+            
+            if (updated) {
+                LOGGER.info("BillingService: Billing status updated - ID: " + billingId + ", Status: " + status);
+            }
+
+            return updated;
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error updating billing status", e);
+            return false;
         }
-        
-        if (bill.getClientId() == null || bill.getClientId() <= 0) {
-            return "Valid client is required";
+    }
+
+    /**
+     * Delete billing
+     */
+    public boolean deleteBilling(Long billingId) {
+        try {
+            if (billingId == null) {
+                return false;
+            }
+
+            boolean deleted = billingDAO.deleteBilling(billingId);
+            
+            if (deleted) {
+                LOGGER.info("BillingService: Billing deleted successfully - ID: " + billingId);
+            }
+
+            return deleted;
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error deleting billing", e);
+            return false;
         }
-        
-        if (bill.getClientName() == null || bill.getClientName().trim().isEmpty()) {
-            return "Client name is required";
+    }
+
+    /**
+     * Get billings by client ID
+     */
+    public List<BillingDTO> getBillingsByClientId(Long clientId) {
+        try {
+            if (clientId == null) {
+                return List.of();
+            }
+            return billingDAO.getBillingsByClientId(clientId);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error retrieving billings by client ID", e);
+            throw new RuntimeException("Error retrieving client billings: " + e.getMessage(), e);
         }
-        
-        if (bill.getItems() == null || bill.getItems().isEmpty()) {
-            return "At least one item is required";
+    }
+
+    /**
+     * Get billings by status
+     */
+    public List<BillingDTO> getBillingsByStatus(String status) {
+        try {
+            if (status == null || status.trim().isEmpty()) {
+                return List.of();
+            }
+            return billingDAO.getBillingsByStatus(status.toUpperCase());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error retrieving billings by status", e);
+            throw new RuntimeException("Error retrieving billings by status: " + e.getMessage(), e);
         }
-        
+    }
+
+    /**
+     * Search billings by bill number
+     */
+    public List<BillingDTO> searchBillingsByBillNumber(String billNumber) {
+        try {
+            if (billNumber == null || billNumber.trim().isEmpty()) {
+                return List.of();
+            }
+            return billingDAO.searchBillingsByBillNumber(billNumber.trim());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error searching billings", e);
+            throw new RuntimeException("Error searching billings: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Find client by account number
+     */
+    public ClientDTO findClientByAccountNumber(String accountNumber) {
+        try {
+            if (accountNumber == null || accountNumber.trim().isEmpty()) {
+                return null;
+            }
+
+            List<ClientDTO> clients = clientDAO.searchClients("id", accountNumber.trim());
+            return clients.isEmpty() ? null : clients.get(0);
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error finding client by account number", e);
+            return null;
+        }
+    }
+
+    /**
+     * Find client by phone number
+     */
+    public ClientDTO findClientByPhone(String phone) {
+        try {
+            if (phone == null || phone.trim().isEmpty()) {
+                return null;
+            }
+
+            List<ClientDTO> clients = clientDAO.searchClients("phone", phone.trim());
+            return clients.isEmpty() ? null : clients.get(0);
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error finding client by phone", e);
+            return null;
+        }
+    }
+
+    /**
+     * Find book by ISBN
+     */
+    public BookDTO findBookByISBN(String isbn) {
+        try {
+            if (isbn == null || isbn.trim().isEmpty()) {
+                return null;
+            }
+
+            return bookDAO.searchBookByISBN(isbn.trim());
+
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error finding book by ISBN", e);
+            return null;
+        }
+    }
+
+    /**
+     * Get total billings count
+     */
+    public int getTotalBillingsCount() {
+        try {
+            return billingDAO.getTotalBillingsCount();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error getting total billings count", e);
+            return 0;
+        }
+    }
+
+    /**
+     * Generate next bill number
+     */
+    public String generateNextBillNumber() {
+        try {
+            int sequence = billingDAO.getNextBillSequence();
+            String today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+            return String.format("BILL-%s-%04d", today, sequence);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "BillingService: Error generating bill number", e);
+            return "BILL-" + System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Validate billing data
+     */
+    private boolean validateBilling(BillingDTO billing) {
+        if (billing == null) {
+            LOGGER.warning("BillingService: Billing object is null");
+            return false;
+        }
+
+        if (billing.getClientId() == null) {
+            LOGGER.warning("BillingService: Client ID is required");
+            return false;
+        }
+
+        if (billing.getItems() == null || billing.getItems().isEmpty()) {
+            LOGGER.warning("BillingService: Billing must have at least one item");
+            return false;
+        }
+
         // Validate each item
-        for (BillItemDTO item : bill.getItems()) {
-            if (item.getBookId() == null || item.getBookId() <= 0) {
-                return "Invalid book in bill items";
-            }
-            
-            if (item.getQuantity() == null || item.getQuantity() <= 0) {
-                return "Invalid quantity for item: " + item.getBookTitle();
-            }
-            
-            if (item.getUnitPrice() == null || item.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
-                return "Invalid price for item: " + item.getBookTitle();
-            }
-        }
-        
-        return null; // No validation errors
-    }
-    
-    /**
-     * Validate book availability
-     */
-    private boolean validateBookAvailability(BillingDTO bill) {
-        for (BillItemDTO item : bill.getItems()) {
-            BookDTO book = bookDAO.getBookById(item.getBookId());
-            if (book == null) {
-                LOGGER.warning("Book not found: " + item.getBookId());
+        for (BillingItemDTO item : billing.getItems()) {
+            if (!item.isValid()) {
+                LOGGER.warning("BillingService: Invalid billing item found");
                 return false;
             }
-            
-            if (book.getQuantity() < item.getQuantity()) {
-                LOGGER.warning("Insufficient stock for book: " + book.getTitle() + 
-                             " (Available: " + book.getQuantity() + ", Required: " + item.getQuantity() + ")");
+
+            // Check stock availability
+            if (!item.hasSufficientStock()) {
+                LOGGER.warning("BillingService: Insufficient stock for item: " + item.getBookTitle());
                 return false;
             }
         }
-        
+
         return true;
     }
-    
+
     /**
-     * Inner class for billing statistics
+     * Update client loyalty points based on billing total
      */
-    public static class BillingStatistics {
-        private int totalBills;
-        private BigDecimal totalSales;
-        private int pendingBills;
-        private int completedBills;
-        private int cancelledBills;
-        
-        public BillingStatistics(int totalBills, BigDecimal totalSales, 
-                               int pendingBills, int completedBills, int cancelledBills) {
-            this.totalBills = totalBills;
-            this.totalSales = totalSales;
-            this.pendingBills = pendingBills;
-            this.completedBills = completedBills;
-            this.cancelledBills = cancelledBills;
+    private void updateClientLoyaltyPoints(BillingDTO billing) {
+        try {
+            if (billing.getClientId() == null || billing.getTotalAmount() == null) {
+                return;
+            }
+
+            // Calculate points (1 point per 100 LKR spent)
+            int pointsToAdd = billing.getTotalAmount().intValue() / 100;
+            
+            if (pointsToAdd > 0) {
+                ClientDTO client = clientDAO.getClientById(billing.getClientId());
+                if (client != null) {
+                    int newPoints = client.getLoyaltyPointsAsInt() + pointsToAdd;
+                    clientDAO.updateClientLoyaltyPointsAndTier(billing.getClientId(), newPoints, client.getTierId());
+                    LOGGER.info("BillingService: Added " + pointsToAdd + " loyalty points to client " + client.getAccountNumber());
+                }
+            }
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "BillingService: Error updating client loyalty points", e);
+            // Don't fail the billing creation for loyalty points update failure
         }
-        
-        // Getters
-        public int getTotalBills() { return totalBills; }
-        public BigDecimal getTotalSales() { return totalSales; }
-        public int getPendingBills() { return pendingBills; }
-        public int getCompletedBills() { return completedBills; }
-        public int getCancelledBills() { return cancelledBills; }
+    }
+
+    /**
+     * Mark billing as completed
+     */
+    public boolean completeBilling(Long billingId) {
+        return updateBillingStatus(billingId, "COMPLETED");
+    }
+
+    /**
+     * Mark billing as cancelled
+     */
+    public boolean cancelBilling(Long billingId) {
+        return updateBillingStatus(billingId, "CANCELLED");
+    }
+
+    /**
+     * Check if billing can be modified
+     */
+    public boolean canModifyBilling(BillingDTO billing) {
+        return billing != null && "PENDING".equals(billing.getStatus());
+    }
+
+    /**
+     * Validate billing item stock
+     */
+    public boolean validateItemStock(BillingItemDTO item) {
+        try {
+            if (item.getBookId() == null) {
+                return false;
+            }
+
+            BookDTO book = bookDAO.getBookById(item.getBookId());
+            if (book == null) {
+                return false;
+            }
+
+            item.setBook(book);
+            return item.hasSufficientStock();
+
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "BillingService: Error validating item stock", e);
+            return false;
+        }
+    }
+
+    /**
+     * Get available payment methods
+     */
+    public String[] getAvailablePaymentMethods() {
+        return new String[]{"CASH", "CARD", "MOBILE"};
+    }
+
+    /**
+     * Get available billing statuses
+     */
+    public String[] getAvailableStatuses() {
+        return new String[]{"PENDING", "COMPLETED", "CANCELLED"};
     }
 }

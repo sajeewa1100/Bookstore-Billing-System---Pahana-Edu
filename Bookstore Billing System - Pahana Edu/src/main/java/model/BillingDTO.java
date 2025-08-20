@@ -1,5 +1,6 @@
 package model;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -7,390 +8,399 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data Transfer Object for Billing
- * Represents a billing transaction with items and client information
+ * Data Transfer Object for Billing entity
+ * Represents billing information in the bookstore system
  */
-public class BillingDTO {
-
+public class BillingDTO implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
     private Long id;
     private String billNumber;
     private Long clientId;
-    private String clientName;
-    private String clientEmail;
-    private String clientPhone;
-    private LocalDateTime billDate;
+    private ClientDTO client;
     private BigDecimal subtotal;
-    private BigDecimal taxAmount;
     private BigDecimal discountAmount;
+    private BigDecimal taxAmount;
     private BigDecimal totalAmount;
     private String status; // PENDING, COMPLETED, CANCELLED
-    private String paymentMethod; // CASH, CARD, ONLINE
+    private String paymentMethod; // CASH, CARD, MOBILE
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
-    // Bill Items
-    private List<BillItemDTO> items;
-
-    /**
-     * Default constructor
-     */
+    private List<BillingItemDTO> items;
+    
+    // Default constructor
     public BillingDTO() {
-        this.items = new ArrayList<>();
+        this.subtotal = BigDecimal.ZERO;
+        this.discountAmount = BigDecimal.ZERO;
+        this.taxAmount = BigDecimal.ZERO;
+        this.totalAmount = BigDecimal.ZERO;
         this.status = "PENDING";
-        this.billDate = LocalDateTime.now();
+        this.paymentMethod = "CASH";
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
-        this.subtotal = BigDecimal.ZERO;
-        this.taxAmount = BigDecimal.ZERO;
-        this.discountAmount = BigDecimal.ZERO;
-        this.totalAmount = BigDecimal.ZERO;
+        this.items = new ArrayList<>();
     }
-
-    /**
-     * Constructor with basic info
-     */
-    public BillingDTO(Long clientId, String clientName, String clientEmail, String clientPhone) {
+    
+    // Constructor with essential fields
+    public BillingDTO(Long clientId, String paymentMethod) {
         this();
         this.clientId = clientId;
-        this.clientName = clientName;
-        this.clientEmail = clientEmail;
-        this.clientPhone = clientPhone;
+        this.paymentMethod = paymentMethod;
         generateBillNumber();
     }
-
+    
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    
+    public String getBillNumber() { return billNumber; }
+    public void setBillNumber(String billNumber) { this.billNumber = billNumber; }
+    
+    public Long getClientId() { return clientId; }
+    public void setClientId(Long clientId) { this.clientId = clientId; }
+    
+    public ClientDTO getClient() { return client; }
+    public void setClient(ClientDTO client) { 
+        this.client = client;
+        if (client != null) {
+            this.clientId = client.getId();
+        }
+    }
+    
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+    
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
+    
+    public BigDecimal getTaxAmount() { return taxAmount; }
+    public void setTaxAmount(BigDecimal taxAmount) { this.taxAmount = taxAmount; }
+    
+    public BigDecimal getTotalAmount() { return totalAmount; }
+    public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+    
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    
+    public List<BillingItemDTO> getItems() { return items; }
+    public void setItems(List<BillingItemDTO> items) { this.items = items; }
+    
+    // Utility methods
+    
     /**
      * Generate unique bill number
      */
     public void generateBillNumber() {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-        this.billNumber = "BILL-" + LocalDateTime.now().format(formatter);
-    }
-
-    /**
-     * Add item to bill
-     */
-    public void addItem(BillItemDTO item) {
-        if (item != null) {
-            this.items.add(item);
-            calculateTotals();
+        if (this.billNumber == null || this.billNumber.isEmpty()) {
+            this.billNumber = "BILL-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) 
+                            + "-" + System.currentTimeMillis() % 10000;
         }
     }
-
+    
     /**
-     * Remove item from bill
+     * Add item to billing
+     */
+    public void addItem(BillingItemDTO item) {
+        if (items == null) {
+            items = new ArrayList<>();
+        }
+        item.setBillingId(this.id);
+        items.add(item);
+        recalculateAmounts();
+    }
+    
+    /**
+     * Remove item from billing
+     */
+    public void removeItem(BillingItemDTO item) {
+        if (items != null) {
+            items.remove(item);
+            recalculateAmounts();
+        }
+    }
+    
+    /**
+     * Remove item by index
      */
     public void removeItem(int index) {
-        if (index >= 0 && index < items.size()) {
-            this.items.remove(index);
-            calculateTotals();
+        if (items != null && index >= 0 && index < items.size()) {
+            items.remove(index);
+            recalculateAmounts();
         }
     }
-
+    
     /**
-     * Calculate totals based on items with tier and points discounts
+     * Clear all items
      */
-    public void calculateTotalsWithDiscounts(BigDecimal tierDiscountAmount, BigDecimal pointsDiscountAmount) {
-        BigDecimal itemsTotal = BigDecimal.ZERO;
-
-        for (BillItemDTO item : items) {
-            itemsTotal = itemsTotal.add(item.getTotal());
-        }
-
-        this.subtotal = itemsTotal;
-
-        // Set total discount (tier + points)
-        this.discountAmount = tierDiscountAmount.add(pointsDiscountAmount);
-
-        // Calculate taxable amount after discount
-        BigDecimal taxableAmount = this.subtotal.subtract(this.discountAmount);
-
-        // Ensure taxable amount is not negative
-        if (taxableAmount.compareTo(BigDecimal.ZERO) < 0) {
-            taxableAmount = BigDecimal.ZERO;
-        }
-
-        // Calculate tax (8% on taxable amount)
-        this.taxAmount = taxableAmount.multiply(new BigDecimal("0.08"));
-
-        // Calculate total
-        this.totalAmount = taxableAmount.add(this.taxAmount);
-
-        // Ensure total is not negative
-        if (this.totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-            this.totalAmount = BigDecimal.ZERO;
+    public void clearItems() {
+        if (items != null) {
+            items.clear();
+            recalculateAmounts();
         }
     }
-
-    /**
-     * Override the existing calculateTotals method to work with new system
-     */
-    public void calculateTotals() {
-        // Calculate without any discounts first
-        calculateTotalsWithDiscounts(BigDecimal.ZERO, BigDecimal.ZERO);
-    }
-
-    /**
-     * Apply discount percentage
-     */
-    public void applyDiscountPercentage(BigDecimal percentage) {
-        if (percentage.compareTo(BigDecimal.ZERO) >= 0 && percentage.compareTo(new BigDecimal("100")) <= 0) {
-            this.discountAmount = this.subtotal.multiply(percentage).divide(new BigDecimal("100"));
-            calculateTotals();
-        }
-    }
-
-    /**
-     * Apply fixed discount amount
-     */
-    public void applyDiscountAmount(BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) >= 0) {
-            this.discountAmount = amount;
-            calculateTotals();
-        }
-    }
-
-    /**
-     * Get formatted bill date
-     */
-    public String getFormattedBillDate() {
-        if (billDate != null) {
-            return billDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        }
-        return "";
-    }
-
-    /**
-     * Get formatted bill date (short)
-     */
-    public String getFormattedBillDateShort() {
-        if (billDate != null) {
-            return billDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        }
-        return "";
-    }
-
-    /**
-     * Get formatted discount amount
-     */
-    public String getFormattedDiscountAmount() {
-        return "Rs. " + (discountAmount != null ? discountAmount.toString() : "0.00");
-    }
-
-    /**
-     * Get formatted tax amount
-     */
-    public String getFormattedTaxAmount() {
-        return "Rs. " + (taxAmount != null ? taxAmount.toString() : "0.00");
-    }
-
-    /**
-     * Get formatted total amount
-     */
-    public String getFormattedTotalAmount() {
-        return "Rs. " + (totalAmount != null ? totalAmount.toString() : "0.00");
-    }
-
-    /**
-     * Get formatted subtotal
-     */
-    public String getFormattedSubtotal() {
-        return "Rs. " + (subtotal != null ? subtotal.toString() : "0.00");
-    }
-
-    /**
-     * Check if bill has any discount applied
-     */
-    public boolean hasDiscount() {
-        return discountAmount != null && discountAmount.compareTo(BigDecimal.ZERO) > 0;
-    }
-
-    /**
-     * Calculate points that would be earned from this bill total
-     */
-    public int calculatePointsEarned() {
-        if (totalAmount == null) {
-            return 0;
-        }
-        return totalAmount.divide(new BigDecimal("100"), 0, java.math.RoundingMode.DOWN).intValue();
-    }
-
+    
     /**
      * Get total items count
      */
-    public int getTotalItemsCount() {
-        return items.stream().mapToInt(BillItemDTO::getQuantity).sum();
+    public int getItemsCount() {
+        return items != null ? items.size() : 0;
     }
-
+    
     /**
-     * Check if bill is completed
+     * Get total quantity of all items
+     */
+    public int getTotalQuantity() {
+        if (items == null) return 0;
+        return items.stream().mapToInt(BillingItemDTO::getQuantity).sum();
+    }
+    
+    /**
+     * Recalculate all amounts based on items
+     */
+    public void recalculateAmounts() {
+        if (items == null || items.isEmpty()) {
+            this.subtotal = BigDecimal.ZERO;
+            this.discountAmount = BigDecimal.ZERO;
+            this.taxAmount = BigDecimal.ZERO;
+            this.totalAmount = BigDecimal.ZERO;
+            return;
+        }
+        
+        // Calculate subtotal
+        this.subtotal = items.stream()
+                .map(BillingItemDTO::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Apply client tier discount if available
+        if (client != null && client.getTier() != null) {
+            BigDecimal discountRate = client.getTier().getDiscountRate();
+            if (discountRate != null && discountRate.compareTo(BigDecimal.ZERO) > 0) {
+                this.discountAmount = subtotal.multiply(discountRate).setScale(2, BigDecimal.ROUND_HALF_UP);
+            }
+        }
+        
+        // Calculate tax (assuming 8% tax rate)
+        BigDecimal taxRate = new BigDecimal("0.08");
+        BigDecimal taxableAmount = subtotal.subtract(discountAmount);
+        this.taxAmount = taxableAmount.multiply(taxRate).setScale(2, BigDecimal.ROUND_HALF_UP);
+        
+        // Calculate total
+        this.totalAmount = subtotal.subtract(discountAmount).add(taxAmount);
+        
+        // Update timestamp
+        this.updatedAt = LocalDateTime.now();
+    }
+    
+    /**
+     * Apply custom discount
+     */
+    public void applyDiscount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
+        recalculateTotal();
+    }
+    
+    /**
+     * Apply discount percentage
+     */
+    public void applyDiscountPercentage(BigDecimal discountPercentage) {
+        if (discountPercentage != null && discountPercentage.compareTo(BigDecimal.ZERO) > 0) {
+            this.discountAmount = subtotal.multiply(discountPercentage.divide(new BigDecimal("100")))
+                                          .setScale(2, BigDecimal.ROUND_HALF_UP);
+            recalculateTotal();
+        }
+    }
+    
+    /**
+     * Recalculate total only (when discount or tax is manually set)
+     */
+    private void recalculateTotal() {
+        this.totalAmount = subtotal.subtract(discountAmount).add(taxAmount);
+        this.updatedAt = LocalDateTime.now();
+    }
+    
+    /**
+     * Check if billing is completed
      */
     public boolean isCompleted() {
-        return "COMPLETED".equals(this.status);
+        return "COMPLETED".equals(status);
     }
-
+    
     /**
-     * Check if bill is pending
-     */
-    public boolean isPending() {
-        return "PENDING".equals(this.status);
-    }
-
-    /**
-     * Check if bill is cancelled
+     * Check if billing is cancelled
      */
     public boolean isCancelled() {
-        return "CANCELLED".equals(this.status);
+        return "CANCELLED".equals(status);
     }
-
-    // Getters and Setters
-    public Long getId() {
-        return id;
+    
+    /**
+     * Check if billing is pending
+     */
+    public boolean isPending() {
+        return "PENDING".equals(status);
     }
-
-    public void setId(Long id) {
-        this.id = id;
+    
+    /**
+     * Mark billing as completed
+     */
+    public void markAsCompleted() {
+        this.status = "COMPLETED";
+        this.updatedAt = LocalDateTime.now();
     }
-
-    public String getBillNumber() {
-        return billNumber;
+    
+    /**
+     * Mark billing as cancelled
+     */
+    public void markAsCancelled() {
+        this.status = "CANCELLED";
+        this.updatedAt = LocalDateTime.now();
     }
-
-    public void setBillNumber(String billNumber) {
-        this.billNumber = billNumber;
+    
+    /**
+     * Get formatted created date
+     */
+    public String getFormattedCreatedAt() {
+        if (createdAt != null) {
+            return createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        return "";
     }
-
-    public Long getClientId() {
-        return clientId;
+    
+    /**
+     * Get formatted created date (short)
+     */
+    public String getFormattedCreatedAtShort() {
+        if (createdAt != null) {
+            return createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        }
+        return "";
     }
-
-    public void setClientId(Long clientId) {
-        this.clientId = clientId;
+    
+    /**
+     * Get formatted created time
+     */
+    public String getFormattedCreatedTime() {
+        if (createdAt != null) {
+            return createdAt.format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        }
+        return "";
     }
-
+    
+    /**
+     * Get client name for display
+     */
     public String getClientName() {
-        return clientName;
+        return client != null ? client.getFullName() : "Unknown Client";
     }
-
-    public void setClientName(String clientName) {
-        this.clientName = clientName;
+    
+    /**
+     * Get client account number for display
+     */
+    public String getClientAccountNumber() {
+        return client != null ? client.getAccountNumber() : "";
     }
-
-    public String getClientEmail() {
-        return clientEmail;
+    
+    /**
+     * Get discount percentage
+     */
+    public BigDecimal getDiscountPercentage() {
+        if (subtotal.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return discountAmount.multiply(new BigDecimal("100"))
+                           .divide(subtotal, 2, BigDecimal.ROUND_HALF_UP);
     }
-
-    public void setClientEmail(String clientEmail) {
-        this.clientEmail = clientEmail;
+    
+    /**
+     * Get tax percentage (8%)
+     */
+    public BigDecimal getTaxPercentage() {
+        return new BigDecimal("8.00");
     }
-
-    public String getClientPhone() {
-        return clientPhone;
+    
+    /**
+     * Validate billing data
+     */
+    public boolean isValid() {
+        return clientId != null && 
+               items != null && !items.isEmpty() &&
+               totalAmount.compareTo(BigDecimal.ZERO) > 0;
     }
-
-    public void setClientPhone(String clientPhone) {
-        this.clientPhone = clientPhone;
+    
+    /**
+     * Get status color for UI
+     */
+    public String getStatusColor() {
+        switch (status) {
+            case "COMPLETED":
+                return "success";
+            case "CANCELLED":
+                return "danger";
+            case "PENDING":
+            default:
+                return "warning";
+        }
     }
-
-    public LocalDateTime getBillDate() {
-        return billDate;
+    
+    /**
+     * Get payment method icon
+     */
+    public String getPaymentMethodIcon() {
+        switch (paymentMethod) {
+            case "CARD":
+                return "fas fa-credit-card";
+            case "MOBILE":
+                return "fas fa-mobile-alt";
+            case "CASH":
+            default:
+                return "fas fa-money-bill-wave";
+        }
     }
-
-    public void setBillDate(LocalDateTime billDate) {
-        this.billDate = billDate;
-    }
-
-    public BigDecimal getSubtotal() {
-        return subtotal;
-    }
-
-    public void setSubtotal(BigDecimal subtotal) {
-        this.subtotal = subtotal;
-    }
-
-    public BigDecimal getTaxAmount() {
-        return taxAmount;
-    }
-
-    public void setTaxAmount(BigDecimal taxAmount) {
-        this.taxAmount = taxAmount;
-    }
-
-    public BigDecimal getDiscountAmount() {
-        return discountAmount;
-    }
-
-    public void setDiscountAmount(BigDecimal discountAmount) {
-        this.discountAmount = discountAmount;
-    }
-
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
-
-    public void setTotalAmount(BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
-
-    public String getNotes() {
-        return notes;
-    }
-
-    public void setNotes(String notes) {
-        this.notes = notes;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public List<BillItemDTO> getItems() {
-        return items;
-    }
-
-    public void setItems(List<BillItemDTO> items) {
-        this.items = items;
-        calculateTotals();
-    }
-
+    
     @Override
     public String toString() {
         return "BillingDTO{" +
                 "id=" + id +
                 ", billNumber='" + billNumber + '\'' +
-                ", clientName='" + clientName + '\'' +
-                ", billDate=" + billDate +
+                ", clientId=" + clientId +
+                ", subtotal=" + subtotal +
+                ", discountAmount=" + discountAmount +
+                ", taxAmount=" + taxAmount +
                 ", totalAmount=" + totalAmount +
                 ", status='" + status + '\'' +
-                ", itemsCount=" + items.size() +
+                ", paymentMethod='" + paymentMethod + '\'' +
+                ", itemsCount=" + getItemsCount() +
                 '}';
+    }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        
+        BillingDTO that = (BillingDTO) o;
+        
+        if (id != null) {
+            return id.equals(that.id);
+        }
+        
+        return billNumber != null && billNumber.equals(that.billNumber);
+    }
+    
+    @Override
+    public int hashCode() {
+        return id != null ? id.hashCode() : (billNumber != null ? billNumber.hashCode() : 0);
     }
 }

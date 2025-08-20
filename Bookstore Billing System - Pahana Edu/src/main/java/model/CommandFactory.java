@@ -81,11 +81,7 @@ public class CommandFactory {
                 return new ViewSingleBillingCommand(billingService);
             case "print":
                 return new PrintBillingCommand(billingService);
-            case "complete":
-                return new CompleteBillingCommand(billingService);
            
-            case "delete":
-                return new DeleteBillingCommand(billingService);
             default:
                 return null;
         }
