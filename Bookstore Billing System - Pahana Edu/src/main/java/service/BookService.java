@@ -1,19 +1,16 @@
-// BookService.java - Fixed Implementation for Billing Integration
 package service;
 
 import dao.BookDAO;
 import model.BookDTO;
-import util.ConnectionManager;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class BookService {
     
+    private static final Logger LOGGER = Logger.getLogger(BookService.class.getName());
     private final BookDAO bookDAO;
     
     public BookService() {
@@ -25,41 +22,15 @@ public class BookService {
      * Get all books - Used by BillingServlet
      */
     public List<BookDTO> getAllBooks() {
-        List<BookDTO> books = new ArrayList<>();
-        String sql = "SELECT id, title, author, category, price, isbn, quantity, publisher FROM books ORDER BY title";
-
-        try (Connection conn = ConnectionManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                BookDTO book = new BookDTO(
-                    rs.getInt("id"),
-                    rs.getString("title"),
-                    rs.getString("author"),
-                    rs.getBigDecimal("price"),
-                    rs.getString("category"),
-                    rs.getString("isbn"),
-                    rs.getInt("quantity"),
-                    rs.getString("publisher")
-                );
-                books.add(book);
-            }
-
-            // Check if books are retrieved
-            if (books.isEmpty()) {
-                System.out.println("⚠️ No books found in the database.");
-            } else {
-                System.out.println("📚 Retrieved " + books.size() + " books.");
-            }
-            
+        try {
+            List<BookDTO> books = bookDAO.getAllBooks();
+            System.out.println("📚 BookService: Retrieved " + books.size() + " books");
+            return books;
         } catch (SQLException e) {
-            System.err.println("❌ Error getting all books: " + e.getMessage());
+            System.err.println("❌ BookService: Error getting all books: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Error getting all books: " + e.getMessage(), e);
+            return new ArrayList<>();
         }
-
-        return books;
     }
     
     /**
@@ -76,17 +47,17 @@ public class BookService {
                 System.out.println("⚠️ BookService: No book found with ID " + bookId);
             }
             return book;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error getting book by ID " + bookId + ": " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Failed to get book by ID: " + e.getMessage(), e);
+            return null;
         }
     }
     
     /**
-     * Search book by ISBN - FIXED to use DAO method
+     * Find book by ISBN - Used by BillingService
      */
-    public BookDTO searchBookByISBN(String isbn) {
+    public BookDTO findBookByISBN(String isbn) {
         try {
             if (isbn == null || isbn.trim().isEmpty()) {
                 System.out.println("⚠️ BookService: Empty ISBN provided");
@@ -94,9 +65,7 @@ public class BookService {
             }
             
             System.out.println("🔍 BookService: Searching for book by ISBN: " + isbn.trim());
-            
-            // Use the DAO method directly - THIS WAS THE MISSING PIECE!
-            BookDTO book = bookDAO.searchBookByISBN(isbn.trim());
+            BookDTO book = bookDAO.getBookByISBN(isbn.trim());
             
             if (book != null) {
                 System.out.println("✅ BookService: Found book by ISBN " + isbn + ": " + book.getTitle() + 
@@ -108,7 +77,7 @@ public class BookService {
             
             return book;
             
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error searching book by ISBN: " + e.getMessage());
             e.printStackTrace();
             return null;
@@ -116,32 +85,41 @@ public class BookService {
     }
     
     /**
-     * Get all categories
+     * Get all categories - FIXED with error handling
      */
     public List<String> getBookCategories() {
         try {
             List<String> categories = bookDAO.getAllCategories();
             System.out.println("📂 BookService: Retrieved " + categories.size() + " categories");
             return categories;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error getting categories: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            // Return empty list instead of throwing exception
+            return new ArrayList<>();
+        } catch (Exception e) {
+            System.err.println("❌ BookService: Unexpected error getting categories: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
         }
     }
     
     /**
-     * Get books by category
+     * Get books by category - FIXED with error handling
      */
     public List<BookDTO> getBooksByCategory(String category) {
         try {
             List<BookDTO> books = bookDAO.getBooksByCategory(category);
             System.out.println("📚 BookService: Retrieved " + books.size() + " books for category: " + category);
             return books;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error getting books by category: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return new ArrayList<>();
+        } catch (Exception e) {
+            System.err.println("❌ BookService: Unexpected error getting books by category: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
         }
     }
     
@@ -153,7 +131,7 @@ public class BookService {
             int count = bookDAO.getTotalBooksCount();
             System.out.println("📊 BookService: Total books count: " + count);
             return count;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error getting total books count: " + e.getMessage());
             e.printStackTrace();
             return 0;
@@ -172,10 +150,10 @@ public class BookService {
                 System.out.println("⚠️ BookService: Failed to add book: " + book.getTitle());
             }
             return result;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error adding book: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return false;
         }
     }
     
@@ -191,10 +169,10 @@ public class BookService {
                 System.out.println("⚠️ BookService: Failed to update book: " + book.getTitle());
             }
             return result;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error updating book: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return false;
         }
     }
     
@@ -214,10 +192,10 @@ public class BookService {
                 System.out.println("⚠️ BookService: Failed to delete book ID: " + bookId);
             }
             return result;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error deleting book: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return false;
         }
     }
     
@@ -229,7 +207,7 @@ public class BookService {
             boolean exists = bookDAO.bookExists(bookId);
             System.out.println("🔍 BookService: Book ID " + bookId + " exists: " + exists);
             return exists;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error checking book existence: " + e.getMessage());
             e.printStackTrace();
             return false;
@@ -244,10 +222,10 @@ public class BookService {
             List<BookDTO> books = bookDAO.searchBooksByTitle(title);
             System.out.println("🔍 BookService: Found " + books.size() + " books matching title: " + title);
             return books;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error searching books by title: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return new ArrayList<>();
         }
     }
     
@@ -259,10 +237,10 @@ public class BookService {
             List<BookDTO> books = bookDAO.searchBooksByAuthor(author);
             System.out.println("🔍 BookService: Found " + books.size() + " books by author: " + author);
             return books;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error searching books by author: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return new ArrayList<>();
         }
     }
     
@@ -274,10 +252,10 @@ public class BookService {
             List<BookDTO> books = bookDAO.getLowStockBooks(threshold);
             System.out.println("📉 BookService: Found " + books.size() + " books with low stock (< " + threshold + ")");
             return books;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             System.err.println("❌ BookService: Error getting low stock books: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return new ArrayList<>();
         }
     }
     
@@ -335,6 +313,21 @@ public class BookService {
     }
     
     /**
+     * Search books with general search (used by existing servlet)
+     */
+    public List<BookDTO> searchBooks(String searchType, String searchQuery) {
+        try {
+            List<BookDTO> books = bookDAO.searchBooks(searchType, searchQuery);
+            System.out.println("🔍 BookService: Found " + books.size() + " books for search: " + searchQuery);
+            return books;
+        } catch (SQLException e) {
+            System.err.println("❌ BookService: Error searching books: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Debug method to test service connectivity
      */
     public void testServiceConnectivity() {
@@ -353,6 +346,10 @@ public class BookService {
             List<BookDTO> allBooks = getAllBooks();
             System.out.println("📚 getAllBooks() returned: " + allBooks.size() + " books");
             
+            // Test categories
+            List<String> categories = getBookCategories();
+            System.out.println("📂 getBookCategories() returned: " + categories.size() + " categories");
+            
             if (allBooks.size() > 0) {
                 // Test getBookById on first book
                 BookDTO firstBook = allBooks.get(0);
@@ -360,10 +357,10 @@ public class BookService {
                 System.out.println("🔍 getBookById(" + firstBook.getId() + ") test: " + 
                                  (testBook != null ? "SUCCESS" : "FAILED"));
                 
-                // Test searchBookByISBN if ISBN exists
+                // Test findBookByISBN if ISBN exists
                 if (firstBook.getIsbn() != null && !firstBook.getIsbn().trim().isEmpty()) {
-                    BookDTO isbnBook = searchBookByISBN(firstBook.getIsbn());
-                    System.out.println("🔍 searchBookByISBN('" + firstBook.getIsbn() + "') test: " + 
+                    BookDTO isbnBook = findBookByISBN(firstBook.getIsbn());
+                    System.out.println("🔍 findBookByISBN('" + firstBook.getIsbn() + "') test: " + 
                                      (isbnBook != null ? "SUCCESS" : "FAILED"));
                 }
             }

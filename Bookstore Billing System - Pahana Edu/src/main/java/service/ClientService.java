@@ -287,9 +287,9 @@ public class ClientService {
             
             html.append("<div class='detail-row'>");
             html.append("<span class='label'>Auto Mail:</span>");
-            html.append("<span class='value auto-mail ").append(client.isSendMailAuto() ? "enabled" : "disabled").append("'>");
-            html.append("<i class='fas ").append(client.isSendMailAuto() ? "fa-check" : "fa-times").append("'></i> ");
-            html.append(client.isSendMailAuto() ? "Enabled" : "Disabled");
+            html.append("<span class='value auto-mail ").append(client.getSendMailAuto() ? "enabled" : "disabled").append("'>");
+            html.append("<i class='fas ").append(client.getSendMailAuto() ? "fa-check" : "fa-times").append("'></i> ");
+            html.append(client.getSendMailAuto() ? "Enabled" : "Disabled");
             html.append("</span>");
             html.append("</div>");
             
@@ -324,5 +324,96 @@ public class ClientService {
             address.append(client.getZip());
         }
         return address.toString();
+    }
+    
+    /**
+     * Find client by phone number
+     */
+    public ClientDTO findClientByPhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            List<ClientDTO> clients = clientDAO.searchClients("phone", phone.trim());
+            if (!clients.isEmpty()) {
+                LOGGER.info("ClientService: Found client by phone: " + phone);
+                return clients.get(0); // Return first match
+            }
+            
+            LOGGER.info("ClientService: No client found with phone: " + phone);
+            return null;
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error finding client by phone", e);
+            return null;
+        }
+    }
+
+    /**
+     * Find client by account number
+     */
+    public ClientDTO findClientByAccountNumber(String accountNumber) {
+        if (accountNumber == null || accountNumber.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            List<ClientDTO> clients = clientDAO.searchClients("id", accountNumber.trim());
+            if (!clients.isEmpty()) {
+                LOGGER.info("ClientService: Found client by account number: " + accountNumber);
+                return clients.get(0); // Return first match
+            }
+            
+            LOGGER.info("ClientService: No client found with account number: " + accountNumber);
+            return null;
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error finding client by account number", e);
+            return null;
+        }
+    }
+
+    /**
+     * Search clients by name
+     */
+    public List<ClientDTO> searchClientsByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            List<ClientDTO> clients = clientDAO.searchClients("name", name.trim());
+            LOGGER.info("ClientService: Found " + clients.size() + " clients matching name: " + name);
+            return clients;
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error searching clients by name", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get client by email (useful for additional searches)
+     */
+    public ClientDTO findClientByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            List<ClientDTO> clients = clientDAO.searchClients("email", email.trim());
+            if (!clients.isEmpty()) {
+                LOGGER.info("ClientService: Found client by email: " + email);
+                return clients.get(0); // Return first match
+            }
+            
+            LOGGER.info("ClientService: No client found with email: " + email);
+            return null;
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "ClientService: Error finding client by email", e);
+            return null;
+        }
     }
 }

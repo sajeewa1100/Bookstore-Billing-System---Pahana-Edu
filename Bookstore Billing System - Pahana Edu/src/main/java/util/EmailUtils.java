@@ -3,6 +3,9 @@ package util;
 import jakarta.mail.*;
 import jakarta.mail.internet.*;
 import java.util.Properties;
+
+import com.mysql.cj.Session;
+
 import java.util.Date;
 
 public class EmailUtils {

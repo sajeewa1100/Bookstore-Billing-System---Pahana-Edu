@@ -81,7 +81,7 @@ public class SearchClientsCommand implements ClientCommand {
             int clientsWithAddress = 0;
 
             for (ClientDTO client : clients) {
-                if (client.isSendMailAuto()) {
+                if (client.getSendMailAuto()) {
                     autoMailEnabled++;
                 }
                 if (client.getPhone() != null && !client.getPhone().trim().isEmpty()) {

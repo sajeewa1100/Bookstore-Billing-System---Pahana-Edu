@@ -63,7 +63,7 @@ public class ViewClientsCommand implements ClientCommand {
 
             // Count clients with various attributes
             for (ClientDTO client : clients) {
-                if (client.isSendMailAuto()) {
+                if (client.getSendMailAuto()) {
                     autoMailEnabled++;
                 }
 

@@ -5,7 +5,8 @@ import java.math.BigDecimal;
 
 /**
  * Data Transfer Object for Billing Item entity
- * Represents individual items in a billing record
+ * Represents individual items within a billing record
+ * Based on your working database structure
  */
 public class BillingItemDTO implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -13,13 +14,13 @@ public class BillingItemDTO implements Serializable {
     private Long id;
     private Long billingId;
     private Integer bookId;
-    private BookDTO book;
     private String bookTitle;
     private String bookAuthor;
     private String bookIsbn;
     private BigDecimal unitPrice;
-    private Integer quantity;
+    private int quantity;
     private BigDecimal totalPrice;
+    private BookDTO book; // Optional - for holding full book object
     
     // Default constructor
     public BillingItemDTO() {
@@ -28,23 +29,32 @@ public class BillingItemDTO implements Serializable {
         this.totalPrice = BigDecimal.ZERO;
     }
     
-    // Constructor with book and quantity
-    public BillingItemDTO(BookDTO book, Integer quantity) {
-        this();
-        setBook(book);
-        setQuantity(quantity);
-    }
-    
-    // Constructor with book details
+    // Constructor with essential fields
     public BillingItemDTO(Integer bookId, String bookTitle, String bookAuthor, 
-                         String bookIsbn, BigDecimal unitPrice, Integer quantity) {
+                         String bookIsbn, BigDecimal unitPrice, int quantity) {
         this();
         this.bookId = bookId;
         this.bookTitle = bookTitle;
         this.bookAuthor = bookAuthor;
         this.bookIsbn = bookIsbn;
         this.unitPrice = unitPrice;
-        setQuantity(quantity);
+        this.quantity = quantity;
+        calculateTotalPrice();
+    }
+    
+    // Constructor with book object (extracts info from BookDTO)
+    public BillingItemDTO(BookDTO book, int quantity) {
+        this();
+        if (book != null) {
+            this.bookId = book.getId();
+            this.bookTitle = book.getTitle();
+            this.bookAuthor = book.getAuthor();
+            this.bookIsbn = book.getIsbn();
+            this.unitPrice = book.getPrice();
+            this.book = book;
+        }
+        this.quantity = quantity;
+        calculateTotalPrice();
     }
     
     // Getters and Setters
@@ -57,50 +67,52 @@ public class BillingItemDTO implements Serializable {
     public Integer getBookId() { return bookId; }
     public void setBookId(Integer bookId) { this.bookId = bookId; }
     
-    public BookDTO getBook() { return book; }
-    public void setBook(BookDTO book) {
-        this.book = book;
-        if (book != null) {
-            this.bookId = book.getId();
-            this.bookTitle = book.getTitle();
-            this.bookAuthor = book.getAuthor();
-            this.bookIsbn = book.getIsbn();
-            this.unitPrice = book.getPrice();
-            calculateTotalPrice();
-        }
-    }
-    
-    public String getBookTitle() { return bookTitle; }
+    public String getBookTitle() { return bookTitle != null ? bookTitle : "Unknown Book"; }
     public void setBookTitle(String bookTitle) { this.bookTitle = bookTitle; }
     
-    public String getBookAuthor() { return bookAuthor; }
+    public String getBookAuthor() { return bookAuthor != null ? bookAuthor : "Unknown Author"; }
     public void setBookAuthor(String bookAuthor) { this.bookAuthor = bookAuthor; }
     
-    public String getBookIsbn() { return bookIsbn; }
+    public String getBookIsbn() { return bookIsbn != null ? bookIsbn : ""; }
     public void setBookIsbn(String bookIsbn) { this.bookIsbn = bookIsbn; }
     
     public BigDecimal getUnitPrice() { return unitPrice; }
-    public void setUnitPrice(BigDecimal unitPrice) {
-        this.unitPrice = unitPrice != null ? unitPrice : BigDecimal.ZERO;
+    public void setUnitPrice(BigDecimal unitPrice) { 
+        this.unitPrice = unitPrice;
         calculateTotalPrice();
     }
     
-    public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity != null && quantity > 0 ? quantity : 1;
+    public int getQuantity() { return quantity; }
+    public void setQuantity(int quantity) { 
+        this.quantity = quantity;
         calculateTotalPrice();
     }
     
     public BigDecimal getTotalPrice() { return totalPrice; }
     public void setTotalPrice(BigDecimal totalPrice) { this.totalPrice = totalPrice; }
     
+    public BookDTO getBook() { return book; }
+    public void setBook(BookDTO book) { 
+        this.book = book;
+        if (book != null) {
+            this.bookId = book.getId();
+            this.bookTitle = book.getTitle();
+            this.bookAuthor = book.getAuthor();
+            this.bookIsbn = book.getIsbn();
+            if (this.unitPrice == null || this.unitPrice.compareTo(BigDecimal.ZERO) == 0) {
+                this.unitPrice = book.getPrice();
+                calculateTotalPrice();
+            }
+        }
+    }
+    
     // Utility methods
     
     /**
-     * Calculate total price based on unit price and quantity
+     * Calculate total price based on quantity and unit price
      */
-    private void calculateTotalPrice() {
-        if (unitPrice != null && quantity != null) {
+    public void calculateTotalPrice() {
+        if (unitPrice != null && quantity > 0) {
             this.totalPrice = unitPrice.multiply(BigDecimal.valueOf(quantity));
         } else {
             this.totalPrice = BigDecimal.ZERO;
@@ -108,108 +120,119 @@ public class BillingItemDTO implements Serializable {
     }
     
     /**
-     * Increase quantity by 1
+     * Check if item has sufficient stock (only if book object is available)
      */
-    public void increaseQuantity() {
-        setQuantity(this.quantity + 1);
+    public boolean hasSufficientStock() {
+        if (book == null) {
+            return true; // Assume available if we don't have book object
+        }
+        return book.getQuantity() >= quantity;
     }
     
     /**
-     * Decrease quantity by 1 (minimum 1)
+     * Get available stock (only if book object is available)
      */
-    public void decreaseQuantity() {
-        if (this.quantity > 1) {
-            setQuantity(this.quantity - 1);
-        }
+    public int getAvailableStock() {
+        return book != null ? book.getQuantity() : 0;
     }
     
     /**
-     * Check if this item has valid book information
+     * Validate billing item data
      */
-    public boolean hasValidBook() {
-        return bookId != null && bookTitle != null && !bookTitle.trim().isEmpty();
+    public boolean isValid() {
+        return bookId != null && 
+               bookTitle != null && !bookTitle.trim().isEmpty() &&
+               quantity > 0 && 
+               unitPrice != null && 
+               unitPrice.compareTo(BigDecimal.ZERO) > 0 &&
+               totalPrice != null &&
+               totalPrice.compareTo(BigDecimal.ZERO) > 0;
     }
     
     /**
-     * Get book display name (title - author)
+     * Check if quantity can be increased (only if book object is available)
      */
-    public String getBookDisplayName() {
-        StringBuilder displayName = new StringBuilder();
-        if (bookTitle != null && !bookTitle.trim().isEmpty()) {
-            displayName.append(bookTitle);
+    public boolean canIncreaseQuantity() {
+        if (book == null) {
+            return true; // Allow if we don't have stock info
         }
-        if (bookAuthor != null && !bookAuthor.trim().isEmpty()) {
-            if (displayName.length() > 0) {
-                displayName.append(" - ");
-            }
-            displayName.append(bookAuthor);
+        return (quantity + 1) <= book.getQuantity();
+    }
+    
+    /**
+     * Check if quantity can be decreased
+     */
+    public boolean canDecreaseQuantity() {
+        return quantity > 1;
+    }
+    
+    /**
+     * Increase quantity by 1 if possible
+     */
+    public boolean increaseQuantity() {
+        if (canIncreaseQuantity()) {
+            setQuantity(quantity + 1);
+            return true;
         }
-        return displayName.toString();
+        return false;
+    }
+    
+    /**
+     * Decrease quantity by 1 if possible
+     */
+    public boolean decreaseQuantity() {
+        if (canDecreaseQuantity()) {
+            setQuantity(quantity - 1);
+            return true;
+        }
+        return false;
     }
     
     /**
      * Get formatted unit price
      */
     public String getFormattedUnitPrice() {
-        return unitPrice != null ? "Rs. " + unitPrice.toString() : "Rs. 0.00";
+        return unitPrice != null ? String.format("Rs. %.2f", unitPrice) : "Rs. 0.00";
     }
     
     /**
      * Get formatted total price
      */
     public String getFormattedTotalPrice() {
-        return totalPrice != null ? "Rs. " + totalPrice.toString() : "Rs. 0.00";
+        return totalPrice != null ? String.format("Rs. %.2f", totalPrice) : "Rs. 0.00";
     }
     
     /**
-     * Validate item data
+     * Get book display info
      */
-    public boolean isValid() {
-        return bookId != null && 
-               bookTitle != null && !bookTitle.trim().isEmpty() &&
-               unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0 &&
-               quantity != null && quantity > 0;
-    }
-    
-    /**
-     * Check if sufficient stock is available
-     */
-    public boolean hasSufficientStock() {
-        return book != null && book.getQuantity() >= quantity;
-    }
-    
-    /**
-     * Get stock status message
-     */
-    public String getStockStatus() {
-        if (book == null) {
-            return "Book information not available";
+    public String getBookDisplayInfo() {
+        StringBuilder info = new StringBuilder();
+        info.append(getBookTitle());
+        if (bookAuthor != null && !bookAuthor.trim().isEmpty()) {
+            info.append(" by ").append(bookAuthor);
         }
-        
-        if (book.getQuantity() == 0) {
-            return "Out of stock";
-        } else if (book.getQuantity() < quantity) {
-            return "Insufficient stock (Available: " + book.getQuantity() + ")";
-        } else if (book.getQuantity() <= 5) {
-            return "Low stock (" + book.getQuantity() + " remaining)";
-        } else {
-            return "In stock (" + book.getQuantity() + " available)";
+        if (bookIsbn != null && !bookIsbn.trim().isEmpty()) {
+            info.append(" (ISBN: ").append(bookIsbn).append(")");
         }
+        return info.toString();
     }
     
     /**
-     * Get stock status color for UI
+     * Create a copy of this billing item
      */
-    public String getStockStatusColor() {
-        if (book == null || book.getQuantity() == 0) {
-            return "danger";
-        } else if (book.getQuantity() < quantity) {
-            return "danger";
-        } else if (book.getQuantity() <= 5) {
-            return "warning";
-        } else {
-            return "success";
-        }
+    public BillingItemDTO copy() {
+        BillingItemDTO copy = new BillingItemDTO();
+        copy.setId(this.id);
+        copy.setBillingId(this.billingId);
+        copy.setBookId(this.bookId);
+        copy.setBookTitle(this.bookTitle);
+        copy.setBookAuthor(this.bookAuthor);
+        copy.setBookIsbn(this.bookIsbn);
+        copy.setUnitPrice(this.unitPrice);
+        copy.setQuantity(this.quantity);
+        copy.setTotalPrice(this.totalPrice);
+        copy.setBook(this.book);
+        return copy;
     }
     
     @Override
@@ -220,8 +243,8 @@ public class BillingItemDTO implements Serializable {
                 ", bookId=" + bookId +
                 ", bookTitle='" + bookTitle + '\'' +
                 ", bookAuthor='" + bookAuthor + '\'' +
-                ", unitPrice=" + unitPrice +
                 ", quantity=" + quantity +
+                ", unitPrice=" + unitPrice +
                 ", totalPrice=" + totalPrice +
                 '}';
     }
@@ -243,8 +266,10 @@ public class BillingItemDTO implements Serializable {
     
     @Override
     public int hashCode() {
-        int result = id != null ? id.hashCode() : 0;
-        result = 31 * result + (bookId != null ? bookId.hashCode() : 0);
+        if (id != null) {
+            return id.hashCode();
+        }
+        int result = bookId != null ? bookId.hashCode() : 0;
         result = 31 * result + (billingId != null ? billingId.hashCode() : 0);
         return result;
     }
